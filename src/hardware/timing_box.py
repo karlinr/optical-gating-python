@@ -174,7 +174,7 @@ class TimingBox:
         return (t_future - t_now) & TimingBox.MAX_TICKS
 
     @staticmethod
-    def tick_is_future(target: int, current: int) -> bool:
+    def is_future_tick(target: int, current: int) -> bool:
         """Determines if a target is ahead of the current clock using half-range logic."""
         return TimingBox.get_tick_diff(target, current) < TimingBox.HALF_RANGE
 
