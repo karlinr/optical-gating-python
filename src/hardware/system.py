@@ -53,6 +53,13 @@ class SystemController:
         fire_time, success = self.timing_box.fire_at(current_time + 0.1 / self.timing_box.TICK_SEC)  # Fire sequence after 100 ms to give us time to prepare
         # Now poll the brightfield camera for the two frames and record their timestamps and the corresponding timing box ticks
         bf_timestamps = []
+
+        while True:
+            # Get the current time in ticks until we the frames to be captured
+            current_ticks = self.timing_box.get_current_time()
+            if TimingBox.is_future_tick(fire_time + total_time, current_ticks):
+                break
+
         while len(bf_timestamps) < 2:
             frame, timestamp = self.bf_cam.get_latest_frame(timeout_ms = 2000)
             if timestamp is not None:
