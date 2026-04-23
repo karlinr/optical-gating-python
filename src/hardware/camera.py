@@ -11,6 +11,7 @@ class XimeaCamera:
     def __init__(self):
         self.serial_number = None
         self.cam = xiapi.Camera()
+        self.img_buffer = xiapi.Image()
 
     def connect(self, serial_number):
         self.serial_number = serial_number

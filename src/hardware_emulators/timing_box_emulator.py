@@ -3,6 +3,8 @@ import time
 import logging
 import threading
 
+from app.config import Config
+
 logging.basicConfig(level=logging.INFO, format='[EMU] %(message)s')
 logger = logging.getLogger("Emulator")
 
@@ -203,5 +205,5 @@ class TimingBoxEmulator:
 
 if __name__ == "__main__":
     # Ensure COM6 is your emulator port
-    emu = TimingBoxEmulator(port="COM6")
+    emu = TimingBoxEmulator(port= Config.Hardware.EMULATOR_PORT)
     emu.run()

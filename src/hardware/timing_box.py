@@ -1,12 +1,17 @@
 import serial
 import logging
+import time
+
+from app.config import Config
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 logger = logging.getLogger("TimingBox")
 
 class TimingBox:
-    TICK_SEC = 2.56e-6  # 2.56 microseconds per tick
+    TICK_SEC = 2.56e-6
+    MAX_TICKS = 0xFFFFFF     # 16,777,215
+    HALF_RANGE = 0x800000    # 8,388,608
 
     CMDS = {
         "SET_PIANOLA": 0x01,
@@ -101,14 +106,14 @@ class TimingBox:
         logger.error(f"Failed to receive pin mapping response for pin {pin}")
         return None
 
-    def add_step(self, logical_pins, duration_seconds):
+    def add_step(self, logical_pins, duration_ticks):
         """
         Adds a step to the sequence. 
         Duration is converted to 2.56us ticks and sent as 3 bytes (Big Endian).
         """
         mask = sum(1 << int(p) for p in set(logical_pins))
-        ticks = max(1, int(duration_seconds / self.TICK_SEC))
-        
+        ticks = max(1, int(duration_ticks))
+
         # Payload: [Address, Mask, Dur_High, Dur_Mid, Dur_Low]
         duration_bytes = list(int(ticks & 0xFFFFFF).to_bytes(3, 'big'))
         payload = [self.step_index, mask & 0xFF] + duration_bytes
@@ -158,10 +163,24 @@ class TimingBox:
         if self.ser:
             self.ser.close()
 
+    @staticmethod
+    def to_24bit(value: float) -> int:
+        """Standardizes any numeric value into the 0 to 2^24-1 range."""
+        return int(value) & TimingBox.MAX_TICKS
+
+    @staticmethod
+    def get_tick_diff(t_future: int, t_now: int) -> int:
+        """Calculates positive distance in modular 24-bit space."""
+        return (t_future - t_now) & TimingBox.MAX_TICKS
+
+    @staticmethod
+    def tick_is_future(target: int, current: int) -> bool:
+        """Determines if a target is ahead of the current clock using half-range logic."""
+        return TimingBox.get_tick_diff(target, current) < TimingBox.HALF_RANGE
+
 if __name__ == "__main__":
-    import time
     
-    box = TimingBox(port="COM5") 
+    box = TimingBox(port= Config.Hardware.TEST_PORT) 
     box.connect()
 
     try:
@@ -171,9 +190,9 @@ if __name__ == "__main__":
         print(f"Result: Physical 10 -> Logical {mapping[0]} (Inverted: {mapping[1]})")
 
         print("\nUploading Pianola Sequence...")
-        box.add_step(logical_pins=[0], duration_seconds=0.5)
-        box.add_step(logical_pins=[1], duration_seconds=0.5)
-        
+        box.add_step(logical_pins=[0], duration_ticks=TimingBox.to_24bit(0.5 / box.TICK_SEC))  # 0.5 seconds in ticks
+        box.add_step(logical_pins=[1], duration_ticks=TimingBox.to_24bit(0.5 / box.TICK_SEC))  # 0.5 seconds in ticks
+
         box.finalize_sequence(repeat=False)
         print("Sequence uploaded and finalized.")
 
@@ -185,7 +204,7 @@ if __name__ == "__main__":
         print("\nTesting Scheduled Execution (FIRE_AT)...")
         
         current_time = box.get_current_time()
-        delay_ticks = int(2.0 / box.TICK_SEC)
+        delay_ticks = TimingBox.to_24bit(2.0 / box.TICK_SEC)  # Schedule for 2 seconds in the future
         future_tick = (current_time + delay_ticks) & 0xFFFFFF
         
         print(f"Current Tick: {current_time}")

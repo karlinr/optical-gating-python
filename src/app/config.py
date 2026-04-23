@@ -19,6 +19,8 @@ class Config:
     # --- Hardware & Pin Mapping ---
     class Hardware:
         PORT = 'COM4'
+        EMULATOR_PORT = 'COM5'
+        TEST_PORT = 'COM6'
         
         class Physical(IntEnum):
             """Actual BNC ports on the Timing Box."""

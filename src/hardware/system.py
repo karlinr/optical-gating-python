@@ -1,10 +1,16 @@
+import logging
+
 from hardware.timing_box import TimingBox
 from hardware.camera import XimeaCamera
 from app.config import Config
 
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
+logger = logging.getLogger("SystemController")
+
 class SystemController:
     def __init__(self):
-        self.timing_box = TimingBox()
+        self.timing_box = TimingBox(port = Config.Hardware.PORT)
         self.bf_cam = XimeaCamera()
         self.fl_cam = XimeaCamera()
 
@@ -31,10 +37,10 @@ class SystemController:
 
         # Now we want to trigger the brightfield camera twice, 1 second apart, and measure the timestamps and timing box ticks to work out the conversion factor
         # First setup our pianola memory to trigger the camera immediately and then 1 second later
-        self.timing_box.add_step([Config.Hardware.Logical.BF], duration_ms = 100)  # Trigger brightfield camera
+        self.timing_box.add_step([Config.Hardware.Logical.BF], duration_ticks=TimingBox.to_24bit(1.0 / self.timing_box.TICK_SEC))  # Trigger brightfield camera
         # Turn off trigger
-        self.timing_box.add_step([], duration_ms = 900)  # Wait for 0.9 seconds (total 1 second from first trigger)
-        self.timing_box.add_step([Config.Hardware.Logical.BF], duration_ms = 100)  # Trigger brightfield camera again
+        self.timing_box.add_step([], duration_ticks=TimingBox.to_24bit(0.9 / self.timing_box.TICK_SEC))  # Wait for 0.9 seconds (total 1 second from first trigger)
+        self.timing_box.add_step([Config.Hardware.Logical.BF], duration_ticks=TimingBox.to_24bit(0.1 / self.timing_box.TICK_SEC))  # Trigger brightfield camera again
         self.timing_box.finalize_sequence(repeat = False)
 
         # Now we run the sequence at a specific time so we know the exact timing box ticks for each trigger
@@ -73,12 +79,12 @@ class SystemController:
         and upload the pianola sequence that will be used to trigger the fl camera during the experiment.
         """
         # Use the pin mapping from the config
-        self.timing_box.map_pin(Config.Hardware.Physical.FL, Config.Hardware.Logical.FL)
+        self.timing_box.map_pin(Config.Hardware.Physical.FL_1, Config.Hardware.Logical.FL_1)
 
         # Upload the pianola sequence that will be used to trigger the fluorescence camera during the experiment
         # We should only have to do this once since we can use fire_at() to schedule it at the correct times during the experiment
-        self.timing_box.add_step([Config.Hardware.Logical.FL], duration_ms = 100)  # Trigger fluorescence camera
-        self.timing_box.add_step([], duration_ms = 100)  # Wait for 0.9 seconds (total 1 second from first trigger)
+        self.timing_box.add_step([Config.Hardware.Logical.FL_1], duration_ticks=TimingBox.to_24bit(0.1 / self.timing_box.TICK_SEC))  # Trigger fluorescence camera
+        self.timing_box.add_step([], duration_ticks=TimingBox.to_24bit(0.9 / self.timing_box.TICK_SEC))  # Wait for 0.9 seconds (total 1 second from first trigger)
         self.timing_box.finalize_sequence(repeat = False)
 
 
@@ -88,22 +94,20 @@ class SystemController:
         """
         return self.bf_cam.get_latest_frame()
     
-    def trigger_fl_frame(self, timestamp):
-        """
-        Triggers a fluorescence frame at a specific timestamp relative to the brightfield camera.
-        The timestamp should be from the brightfield camera since that is our master clock.
-        We convert the timestamp to timing box ticks and schedule a fire at that time.
-        """
-        tick_timestamp = self.timestamp_to_ticks(timestamp)
-        fire_time, success = self.timing_box.fire_at(tick_timestamp)
-        return success, fire_time
+    def trigger_fl_frame(self, timestamp: float):
+        """Schedules a fluorescence trigger with safety checks for wrap-around."""
+        target_tick = self.timestamp_to_ticks(timestamp)
+        current_tick = self.timing_box.get_current_time()
+        
+        if not self.is_future_tick(target_tick, current_tick):
+            logger.warning("Target trigger time has already passed in the 24-bit cycle.")
+            return False, None
+            
+        return self.timing_box.fire_at(target_tick)
 
     def timestamp_to_ticks(self, timestamp):
-        """
-        Convert a camera timestamp to timing box ticks using the previously calculated conversion factor.
-        All timestamps should be from the brightfield camera since that is our master clock.
-        All triggers should be converted to timing box ticks and scheduled using fire_at() to ensure they are correctly synchronised to the camera's timeline.
-        """
-        if not hasattr(self, 'timestamp_to_ticks_gradient') or not hasattr(self, 'timestamp_to_ticks_intercept'):
-            raise ValueError("Conversion factor not calculated. Please run synchronise_camera() first.")
-        return int(self.timestamp_to_ticks_gradient * timestamp + self.timestamp_to_ticks_intercept)
+        if not hasattr(self, 'timestamp_to_ticks_gradient'):
+            raise ValueError("Run synchronise_camera() first.")
+            
+        raw_ticks = (self.timestamp_to_ticks_gradient * timestamp) + self.timestamp_to_ticks_intercept
+        return TimingBox.to_24bit(raw_ticks)
