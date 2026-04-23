@@ -66,6 +66,38 @@ class SystemController:
         self.bf_cam.set_mode_continuous(framerate=Config.BF.framerate)
         self.fl_cam.set_mode_hardware_trigger(cam_trigger_pin = Config.FL.trigger_pin)
 
+    def setup_timing_box_for_experiment(self):
+        """
+        Configures the timing box for the experiment.
+        We need to setup pin mappings
+        and upload the pianola sequence that will be used to trigger the fl camera during the experiment.
+        """
+        # Use the pin mapping from the config
+        self.timing_box.map_pin(Config.Hardware.Physical.FL, Config.Hardware.Logical.FL)
+
+        # Upload the pianola sequence that will be used to trigger the fluorescence camera during the experiment
+        # We should only have to do this once since we can use fire_at() to schedule it at the correct times during the experiment
+        self.timing_box.add_step([Config.Hardware.Logical.FL], duration_ms = 100)  # Trigger fluorescence camera
+        self.timing_box.add_step([], duration_ms = 100)  # Wait for 0.9 seconds (total 1 second from first trigger)
+        self.timing_box.finalize_sequence(repeat = False)
+
+
+    def get_latest_bf_frame(self):
+        """
+        Retrieves the latest frame and timestamp from the brightfield camera.
+        """
+        return self.bf_cam.get_latest_frame()
+    
+    def trigger_fl_frame(self, timestamp):
+        """
+        Triggers a fluorescence frame at a specific timestamp relative to the brightfield camera.
+        The timestamp should be from the brightfield camera since that is our master clock.
+        We convert the timestamp to timing box ticks and schedule a fire at that time.
+        """
+        tick_timestamp = self.timestamp_to_ticks(timestamp)
+        fire_time, success = self.timing_box.fire_at(tick_timestamp)
+        return success, fire_time
+
     def timestamp_to_ticks(self, timestamp):
         """
         Convert a camera timestamp to timing box ticks using the previously calculated conversion factor.
