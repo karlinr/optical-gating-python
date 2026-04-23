@@ -37,10 +37,26 @@ class SystemController:
 
         # Now we run the sequence at a specific time so we know the exact timing box ticks for each trigger
         current_time = self.timing_box.get_current_time()
-        fire_time = self.timing_box.fire_at(current_time + 100)  # Fire sequence after 100 ms to give us time to prepare
+        fire_time, success = self.timing_box.fire_at(current_time + 100)  # Fire sequence after 100 ms to give us time to prepare
         # Now poll the brightfield camera for the two frames and record their timestamps and the corresponding timing box ticks
         bf_timestamps = []
         while len(bf_timestamps) < 2:
             frame, timestamp = self.bf_cam.get_latest_frame(timeout_ms = 2000)
             if timestamp is not None:
                 bf_timestamps.append(timestamp)
+
+        t1_box = fire_time
+        t1_bf = bf_timestamps[0]
+        t2_box = fire_time + 1000  # 1 second later in timing box ticks
+        t2_bf = bf_timestamps[1]
+
+        # Now we can calculate the conversion factor (gradient and intercept) between timing box ticks and camera timestamps
+        # We have two points: (t1_box, t1_bf) and (t2_box, t2_bf)
+        self.timestamp_to_ticks_gradient = (t2_box - t1_box) / (t2_bf - t1_bf)
+        self.timestamp_to_ticks_intercept = t1_box - self.timestamp_to_ticks_gradient * t1_bf
+
+    def timestamp_to_ticks(self, timestamp):
+        """Convert a camera timestamp to timing box ticks using the previously calculated conversion factor."""
+        if not hasattr(self, 'timestamp_to_ticks_gradient') or not hasattr(self, 'timestamp_to_ticks_intercept'):
+            raise ValueError("Conversion factor not calculated. Please run synchronise_camera() first.")
+        return int(self.timestamp_to_ticks_gradient * timestamp + self.timestamp_to_ticks_intercept)
