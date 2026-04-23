@@ -137,7 +137,7 @@ class TimingBox:
         self._send_command("FIRE_AT", data)
         # Returns 1-byte flag and 3-byte clock
         response = self.ser.read(4)
-        return len(response) == 4 and response[0] == 1
+        return int.from_bytes(response[1:4], 'big'), response[0]
 
     def get_current_time(self):
         """Retrieves the current hardware clock in ticks."""
@@ -191,10 +191,10 @@ if __name__ == "__main__":
         print(f"Current Tick: {current_time}")
         print(f"Scheduling fire for tick: {future_tick} (~2.0s from now)")
         
-        success = box.fire_at(future_tick)
+        trig_time, success = box.fire_at(future_tick)
         
         if success:
-            print("✔ Emulator acknowledged the future fire time.")
+            print(f"✔ Emulator acknowledged the future fire time at tick: {trig_time}.")
             print("Waiting for trigger... (Watch the Emulator console)")
             
             time.sleep(3.0)

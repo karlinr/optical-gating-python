@@ -19,7 +19,7 @@ class XimeaCamera:
             logger.info(f"Camera with SN {self.serial_number} opened successfully.")
         except xiapi.XiError as e:
             logger.error(f"Failed to open camera with SN {self.serial_number}: {e}")
-            raise 
+            raise
 
     def get_latest_frame(self, timeout_ms=1000):
         try:

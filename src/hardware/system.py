@@ -37,7 +37,7 @@ class SystemController:
 
         # Now we run the sequence at a specific time so we know the exact timing box ticks for each trigger
         current_time = self.timing_box.get_current_time()
-        self.timing_box.fire_at(current_time + 100)  # Fire sequence after 100 ms to give us time to prepare
+        fire_time = self.timing_box.fire_at(current_time + 100)  # Fire sequence after 100 ms to give us time to prepare
         # Now poll the brightfield camera for the two frames and record their timestamps and the corresponding timing box ticks
         bf_timestamps = []
         while len(bf_timestamps) < 2:
