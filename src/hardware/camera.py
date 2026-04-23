@@ -8,7 +8,7 @@ class XimeaCamera:
     """
     Base class for interacting with Ximea cameras.
     """
-    def __init(self):
+    def __init__(self):
         self.serial_number = None
         self.cam = xiapi.Camera()
 
