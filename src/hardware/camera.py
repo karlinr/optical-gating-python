@@ -49,7 +49,7 @@ class XimeaCamera:
             logger.error(f"Failed to stop acquisition on camera SN {self.serial_number}: {e}")
             raise
 
-    def set_mode_continuous(self):
+    def set_mode_continuous(self, framerate=60):
         """
         Sets the camera to continuous acquisition mode (no external trigger).
         Primarily used for the brightfield but can also be used for the fluorescence when setting up.
@@ -57,7 +57,7 @@ class XimeaCamera:
         try:
             self.cam.set_trigger_source("XI_TRG_OFF")
             self.cam.set_acq_timing_mode("XI_ACQ_TIMING_MODE_FRAME_RATE")
-            self.cam.set_framerate(60)
+            self.cam.set_framerate(framerate)
             logger.info(f"Camera SN {self.serial_number} set to continuous mode.")
         except xiapi.XiError as e:
             logger.error(f"Failed to set continuous mode on camera SN {self.serial_number}: {e}")
@@ -72,7 +72,7 @@ class XimeaCamera:
             self.cam.set_trigger_source(source)
             self.cam.set_gpi_selector(f"XI_GPI_PORT{cam_trigger_pin}")
             self.cam.set_gpi_mode("XI_GPI_TRIGGER")
-            logger.info(f"Camera SN {self.serial_number} set to hardware trigger mode (Source: {source}, GPI: {gpi}).")
+            logger.info(f"Camera SN {self.serial_number} set to hardware trigger mode (Source: {source}, GPI: {cam_trigger_pin}).")
         except xiapi.XiError as e:
             logger.error(f"Failed to set hardware trigger mode on camera SN {self.serial_number}: {e}")
             raise

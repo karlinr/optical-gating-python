@@ -2,7 +2,6 @@ from hardware.timing_box import TimingBox
 from hardware.camera import XimeaCamera
 from app.config import Config
 
-
 class SystemController:
     def __init__(self):
         self.timing_box = TimingBox()
@@ -10,6 +9,9 @@ class SystemController:
         self.fl_cam = XimeaCamera()
 
     def connect_all(self):
+        """
+        Connects to the timing box and both cameras.
+        """
         self.timing_box.connect()
         self.bf_cam.connect(serial_number = Config.BF.serial)
         self.fl_cam.connect(serial_number = Config.FL.serial)
@@ -55,8 +57,21 @@ class SystemController:
         self.timestamp_to_ticks_gradient = (t2_box - t1_box) / (t2_bf - t1_bf)
         self.timestamp_to_ticks_intercept = t1_box - self.timestamp_to_ticks_gradient * t1_bf
 
+    def setup_cameras_for_experiment(self):
+        """
+        Configures the cameras for the experiment.
+        The brightfield camera is set to continuous (framerate) mode since we want it to run freely and provide timestamps.
+        The fluorescence camera is set to hardware trigger mode since we only want it to capture frames when triggered by the timing box.
+        """
+        self.bf_cam.set_mode_continuous(framerate=Config.BF.framerate)
+        self.fl_cam.set_mode_hardware_trigger(cam_trigger_pin = Config.FL.trigger_pin)
+
     def timestamp_to_ticks(self, timestamp):
-        """Convert a camera timestamp to timing box ticks using the previously calculated conversion factor."""
+        """
+        Convert a camera timestamp to timing box ticks using the previously calculated conversion factor.
+        All timestamps should be from the brightfield camera since that is our master clock.
+        All triggers should be converted to timing box ticks and scheduled using fire_at() to ensure they are correctly synchronised to the camera's timeline.
+        """
         if not hasattr(self, 'timestamp_to_ticks_gradient') or not hasattr(self, 'timestamp_to_ticks_intercept'):
             raise ValueError("Conversion factor not calculated. Please run synchronise_camera() first.")
         return int(self.timestamp_to_ticks_gradient * timestamp + self.timestamp_to_ticks_intercept)
