@@ -16,7 +16,7 @@ class CameraConfig:
     box_pins: List[int] = field(default_factory=list)
 
 class Config:
-    # Hardware & Pin Mapping
+    # Timing box and pin mapping
     class TimingBox:
         PORT = 'COM4'
         EMULATOR_PORT = 'COM5'
@@ -40,6 +40,7 @@ class Config:
             FL_2 = 4
             LAS_BLUE = 5
 
+    # Cameras
     # Brightfield
     BF = CameraConfig(
         label="Brightfield camera",
@@ -72,10 +73,18 @@ class Config:
         )
     
     class Gating:
+        # Methods to estimate and predict phase
+        # Options for PHASE_SOURCE: SAD or MLE
+        # Options for PREDICTION_METHOD: BARRIER or KALMAN
         PHASE_SOURCE = "SAD"
+        PREDICTION_METHOD = "BARRIER"
 
+        # Whether we should log all phase estimates or just the PHASE_SOURCE one
         LOG_ALL = True
 
+        # SAD parameters
         REFERENCE_LENGTH = 1000
+
+        # MLE parameters
         BOOTSTRAP_FRAMES = 1000
         N_BINS = 100
