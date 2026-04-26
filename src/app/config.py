@@ -71,3 +71,12 @@ class Config:
                 Hardware.Logical.LAS_GREEN
             ]
         )
+    
+    class Gating:
+        PHASE_SOURCE = "SAD"
+
+        LOG_ALL = True
+
+        REFERENCE_LENGTH = 1000
+        BOOTSTRAP_FRAMES = 1000
+        N_BINS = 100
