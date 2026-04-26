@@ -10,7 +10,7 @@ logger = logging.getLogger("SystemController")
 
 class SystemController:
     def __init__(self):
-        self.timing_box = TimingBox(port = Config.Hardware.PORT)
+        self.timing_box = TimingBox(port = Config.TimingBox.PORT)
         self.bf_cam = XimeaCamera()
         self.fl_cam = XimeaCamera()
 
@@ -37,14 +37,14 @@ class SystemController:
         self.bf_cam.set_mode_hardware_trigger(cam_trigger_pin = Config.BF.trigger_pin)
 
         # Setup timing box trigger to trigger both cameras simultaneously
-        self.timing_box.map_pin(Config.Hardware.Physical.BF, Config.Hardware.Logical.BF)  # Map physical pin to logical bit (camera trigger)
+        self.timing_box.map_pin(Config.TimingBox.Physical.BF, Config.TimingBox.Logical.BF)  # Map physical pin to logical bit (camera trigger)
 
         # Now we want to trigger the brightfield camera twice, 1 second apart, and measure the timestamps and timing box ticks to work out the conversion factor
         # First setup our pianola memory to trigger the camera immediately and then 1 second later
-        self.timing_box.add_step([Config.Hardware.Logical.BF], duration_ticks=pulse_ticks)  # Trigger brightfield camera
+        self.timing_box.add_step([Config.TimingBox.Logical.BF], duration_ticks=pulse_ticks)  # Trigger brightfield camera
         # Turn off trigger
         self.timing_box.add_step([], duration_ticks=wait_ticks)  # Wait for 0.9 seconds (total 1 second from first trigger)
-        self.timing_box.add_step([Config.Hardware.Logical.BF], duration_ticks=pulse_ticks)  # Trigger brightfield camera again
+        self.timing_box.add_step([Config.TimingBox.Logical.BF], duration_ticks=pulse_ticks)  # Trigger brightfield camera again
         self.timing_box.add_step([], duration_ticks=wait_ticks)  # Wait for 0.9 seconds (total 1 second from first trigger)
         self.timing_box.finalize_sequence(repeat = False)
 
@@ -94,11 +94,11 @@ class SystemController:
         and upload the pianola sequence that will be used to trigger the fl camera during the experiment.
         """
         # Use the pin mapping from the config
-        self.timing_box.map_pin(Config.Hardware.Physical.FL_1, Config.Hardware.Logical.FL_1)
+        self.timing_box.map_pin(Config.TimingBox.Physical.FL_1, Config.TimingBox.Logical.FL_1)
 
         # Upload the pianola sequence that will be used to trigger the fluorescence camera during the experiment
         # We should only have to do this once since we can use fire_at() to schedule it at the correct times during the experiment
-        self.timing_box.add_step([Config.Hardware.Logical.FL_1], duration_ticks=TimingBox.to_24bit(0.1 / self.timing_box.TICK_SEC))  # Trigger fluorescence camera
+        self.timing_box.add_step([Config.TimingBox.Logical.FL_1], duration_ticks=TimingBox.to_24bit(0.1 / self.timing_box.TICK_SEC))  # Trigger fluorescence camera
         self.timing_box.add_step([], duration_ticks=TimingBox.to_24bit(0.9 / self.timing_box.TICK_SEC))  # Wait for 0.9 seconds (total 1 second from first trigger)
         self.timing_box.finalize_sequence(repeat = False)
 

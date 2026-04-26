@@ -205,5 +205,5 @@ class TimingBoxEmulator:
 
 if __name__ == "__main__":
     # Ensure COM6 is your emulator port
-    emu = TimingBoxEmulator(port= Config.Hardware.EMULATOR_PORT)
+    emu = TimingBoxEmulator(port= Config.TimingBox.EMULATOR_PORT)
     emu.run()

@@ -16,8 +16,8 @@ class CameraConfig:
     box_pins: List[int] = field(default_factory=list)
 
 class Config:
-    # --- Hardware & Pin Mapping ---
-    class Hardware:
+    # Hardware & Pin Mapping
+    class TimingBox:
         PORT = 'COM4'
         EMULATOR_PORT = 'COM5'
         TEST_PORT = 'COM6'
@@ -40,7 +40,6 @@ class Config:
             FL_2 = 4
             LAS_BLUE = 5
 
-    # --- Camera Instances ---
     # Brightfield
     BF = CameraConfig(
         label="Brightfield camera",
@@ -51,7 +50,7 @@ class Config:
         roi=(856, 572, 484, 488),
         trigger_pin=2,
         box_pins=[
-            Hardware.Logical.BF
+            TimingBox.Logical.BF
             ],
         framerate=80
     )
@@ -66,9 +65,9 @@ class Config:
             roi=None,
             trigger_pin=3,
             box_pins=[
-                Hardware.Logical.FL_1, 
-                Hardware.Logical.LAS_BLUE, 
-                Hardware.Logical.LAS_GREEN
+                TimingBox.Logical.FL_1, 
+                TimingBox.Logical.LAS_BLUE, 
+                TimingBox.Logical.LAS_GREEN
             ]
         )
     

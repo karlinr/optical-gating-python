@@ -180,7 +180,7 @@ class TimingBox:
 
 if __name__ == "__main__":
     
-    box = TimingBox(port= Config.Hardware.TEST_PORT) 
+    box = TimingBox(port= Config.TimingBox.TEST_PORT) 
     box.connect()
 
     try:
