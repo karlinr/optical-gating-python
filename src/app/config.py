@@ -18,7 +18,7 @@ class CameraConfig:
 class Config:
     # Timing box and pin mapping
     class TimingBox:
-        PORT = 'COM4'
+        PORT = 'COM3'
         EMULATOR_PORT = 'COM5'
         TEST_PORT = 'COM6'
         

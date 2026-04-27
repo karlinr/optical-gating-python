@@ -18,7 +18,7 @@ class XimeaCamera:
         try:
             self.cam.open_device_by_SN(self.serial_number)
             logger.info(f"Camera with SN {self.serial_number} opened successfully.")
-        except xiapi.XiError as e:
+        except xiapi.Xi_error as e:
             logger.error(f"Failed to open camera with SN {self.serial_number}: {e}")
             raise
 
@@ -30,7 +30,7 @@ class XimeaCamera:
             frame_data = self.img_buffer.get_image_data_numpy()
 
             return frame_data, timestamp
-        except xiapi.XiError as e:
+        except xiapi.Xi_error as e:
             logger.error(f"Failed to get frame from camera SN {self.serial_number}: {e}")
             raise
 
@@ -38,7 +38,7 @@ class XimeaCamera:
         try:
             self.cam.start_acquisition()
             logger.info(f"Camera SN {self.serial_number} acquisition started.")
-        except xiapi.XiError as e:
+        except xiapi.Xi_error as e:
             logger.error(f"Failed to start acquisition on camera SN {self.serial_number}: {e}")
             raise
 
@@ -46,7 +46,7 @@ class XimeaCamera:
         try:
             self.cam.stop_acquisition()
             logger.info(f"Camera SN {self.serial_number} acquisition stopped.")
-        except xiapi.XiError as e:
+        except xiapi.Xi_error as e:
             logger.error(f"Failed to stop acquisition on camera SN {self.serial_number}: {e}")
             raise
 
@@ -60,7 +60,7 @@ class XimeaCamera:
             self.cam.set_acq_timing_mode("XI_ACQ_TIMING_MODE_FRAME_RATE")
             self.cam.set_framerate(framerate)
             logger.info(f"Camera SN {self.serial_number} set to continuous mode.")
-        except xiapi.XiError as e:
+        except xiapi.Xi_error as e:
             logger.error(f"Failed to set continuous mode on camera SN {self.serial_number}: {e}")
             raise
 
@@ -74,15 +74,12 @@ class XimeaCamera:
             self.cam.set_gpi_selector(f"XI_GPI_PORT{cam_trigger_pin}")
             self.cam.set_gpi_mode("XI_GPI_TRIGGER")
             logger.info(f"Camera SN {self.serial_number} set to hardware trigger mode (Source: {source}, GPI: {cam_trigger_pin}).")
-        except xiapi.XiError as e:
+        except xiapi.Xi_error as e:
             logger.error(f"Failed to set hardware trigger mode on camera SN {self.serial_number}: {e}")
             raise
 
     def close(self):
-        if self.cam.is_device_opened():
-            self.cam.close_device()
-            logger.info(f"Camera with SN {self.serial_number} closed.")
-        else:
-            logger.warning("Camera is not open, cannot close.")
+        self.cam.close_device()
+        logger.info(f"Camera with SN {self.serial_number} closed.")
 
     

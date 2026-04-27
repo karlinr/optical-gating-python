@@ -1,4 +1,5 @@
 import logging
+import time
 
 from hardware.timing_box import TimingBox
 from hardware.camera import XimeaCamera
@@ -35,6 +36,7 @@ class SystemController:
         total_time = pulse_ticks + wait_ticks
 
         self.bf_cam.set_mode_hardware_trigger(cam_trigger_pin = Config.BF.trigger_pin)
+        self.bf_cam.start_acquisition()
 
         # Setup timing box trigger to trigger both cameras simultaneously
         self.timing_box.map_pin(Config.TimingBox.Physical.BF, Config.TimingBox.Logical.BF)  # Map physical pin to logical bit (camera trigger)
@@ -50,15 +52,12 @@ class SystemController:
 
         # Now we run the sequence at a specific time so we know the exact timing box ticks for each trigger
         current_time = self.timing_box.get_current_time()
-        fire_time, success = self.timing_box.fire_at(current_time + 0.1 / self.timing_box.TICK_SEC)  # Fire sequence after 100 ms to give us time to prepare
+        fire_time, success = self.timing_box.fire_at(current_time + TimingBox.to_24bit(0.1 / self.timing_box.TICK_SEC))  # Fire sequence after 100 ms to give us time to prepare
         # Now poll the brightfield camera for the two frames and record their timestamps and the corresponding timing box ticks
         bf_timestamps = []
 
-        while True:
-            # Get the current time in ticks until we the frames to be captured
-            current_ticks = self.timing_box.get_current_time()
-            if TimingBox.is_future_tick(fire_time + total_time, current_ticks):
-                break
+        while TimingBox.is_future_tick(fire_time + total_time, self.timing_box.get_current_time()):
+            time.sleep(0.1) # Small sleep to reduce CPU load
 
         while len(bf_timestamps) < 2:
             frame, timestamp = self.bf_cam.get_latest_frame(timeout_ms = 2000)

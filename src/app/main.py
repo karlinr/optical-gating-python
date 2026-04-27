@@ -3,6 +3,8 @@ import logging
 from hardware.system import SystemController
 from app.config import Config
 
+from logic.phase_estimator import PhaseManager
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 logger = logging.getLogger("Main")
@@ -21,13 +23,15 @@ def main():
         controller.setup_timing_box_for_experiment()
         logger.info("Hardware setup for experiment complete. Ready to run.")
 
+        phase_manager = PhaseManager()
+
         while True:
             frame, timestamp = controller.get_latest_bf_frame()
-            # Get the current time
+            # Convert time to ticks
             time_ticks = controller.timestamp_to_ticks(timestamp)
 
             # Get phase estimate
-            # Not implemented yet
+            #phase_manager.update(frame)
 
             # Do prediction
             # Not implemented yet
