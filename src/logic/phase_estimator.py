@@ -39,7 +39,7 @@ class SADEstimator(PhaseEstimator):
     
     def add_sample(self, frame, **kwargs):
         self.frame_history.append(frame)
-        if len(self.frame_history) >= Config.gating.REFERENCE_LENGTH and not self._ready:
+        if len(self.frame_history) >= Config.Gating.REFERENCE_LENGTH and not self._ready:
             self.build_model(self.frame_history)
     
     def build_model(self, frames):

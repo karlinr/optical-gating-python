@@ -152,6 +152,7 @@ class TimingBox:
 
     def stop(self):
         """Stops the sequence and clears scheduled fires."""
+        self.step_index = 0
         self._send_command("STOP_RESET")
 
     def hard_reset(self):

@@ -5,6 +5,8 @@ from app.config import Config
 
 from logic.phase_estimator import PhaseManager
 
+import matplotlib.pyplot as plt
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 logger = logging.getLogger("Main")
@@ -31,7 +33,10 @@ def main():
             time_ticks = controller.timestamp_to_ticks(timestamp)
 
             # Get phase estimate
-            #phase_manager.update(frame)
+            print(phase_manager.update(frame))
+
+            plt.imshow(frame, cmap='gray')
+            plt.show()
 
             # Do prediction
             # Not implemented yet
@@ -44,9 +49,6 @@ def main():
 
             # If fired, get the latest frame from the fluorescence camera
             # Not implemented yet
-
-            if frame is not None:
-                logger.info(f"Captured frame at timestamp {timestamp:.3f}s")
 
     except KeyboardInterrupt:
         logger.info("Experiment interrupted by user. Shutting down.")

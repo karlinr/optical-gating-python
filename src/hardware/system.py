@@ -36,7 +36,6 @@ class SystemController:
         total_time = pulse_ticks + wait_ticks
 
         self.bf_cam.set_mode_hardware_trigger(cam_trigger_pin = Config.BF.trigger_pin)
-        self.bf_cam.start_acquisition()
 
         # Setup timing box trigger to trigger both cameras simultaneously
         self.timing_box.map_pin(Config.TimingBox.Physical.BF, Config.TimingBox.Logical.BF)  # Map physical pin to logical bit (camera trigger)
@@ -92,6 +91,8 @@ class SystemController:
         We need to setup pin mappings
         and upload the pianola sequence that will be used to trigger the fl camera during the experiment.
         """
+        self.timing_box.stop()
+
         # Use the pin mapping from the config
         self.timing_box.map_pin(Config.TimingBox.Physical.FL_1, Config.TimingBox.Logical.FL_1)
 
