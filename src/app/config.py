@@ -83,7 +83,7 @@ class Config:
         LOG_ALL = True
 
         # SAD parameters
-        REFERENCE_LENGTH = 1000
+        REFERENCE_LENGTH = 20
 
         # MLE parameters
         BOOTSTRAP_FRAMES = 1000

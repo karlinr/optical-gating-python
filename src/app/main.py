@@ -35,9 +35,6 @@ def main():
             # Get phase estimate
             print(phase_manager.update(frame))
 
-            plt.imshow(frame, cmap='gray')
-            plt.show()
-
             # Do prediction
             # Not implemented yet
 

@@ -44,6 +44,12 @@ class SADEstimator(PhaseEstimator):
     
     def build_model(self, frames):
         # To be copied over from main codebase
+
+        if len(frames) > 50:
+            self.reference_frames = np.array(frames[-50:])
+            self.reference_period = 50
+            self.barrier_phase = 0.0
+
         if (self.reference_frames is not None and 
             self.reference_period is not None and 
             self.barrier_phase is not None):
@@ -119,12 +125,20 @@ class PhaseManager:
         
         mle_required = (source == "MLE" or log_all)
         results = {}
+        status = "UNKNOWN"
 
         if not self.sad.is_ready():
             self.sad.add_sample(frame)
+            status = "SAD_BOOTSTRAPPING"
         
         if self.sad.is_ready():
             mle_needs_bootstrap = (mle_required and not self.mle.is_ready())
+            
+            if mle_needs_bootstrap:
+                status = "MLE_BOOTSTRAPPING"
+            else:
+                status = "READY"
+
             sad_calculation_needed = (source == "SAD" or log_all or mle_needs_bootstrap)
             
             if sad_calculation_needed:
@@ -139,5 +153,7 @@ class PhaseManager:
         if self.mle.is_ready() and mle_required:
             phase_mle, score_mle = self.mle.estimate(frame)
             results["mle"] = {"phase": phase_mle, "score": score_mle}
+            status = "READY"
 
+        results["status"] = status
         return results
