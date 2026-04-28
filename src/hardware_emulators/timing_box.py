@@ -6,6 +6,8 @@ import serial
 import time
 import logging
 import threading
+import json
+import socket
 
 from app.config import Config
 
@@ -41,6 +43,7 @@ class TimingBoxEmulator:
         self.ser = serial.Serial(self.port, 115200, timeout=0.01) # Low timeout for responsiveness
         self.running_thread = None
         self.stop_signal = threading.Event()
+        self.broadcast_port = 5005
         self.reset_state()
 
     def reset_state(self):
@@ -94,6 +97,9 @@ class TimingBoxEmulator:
                 else:
                     log_viz += f"{self.CLR_INACTIVE}{i}{self.CLR_RESET}"
             print(f"STEP {current_step:02d} | LOGIC: {log_viz} | PHYS: {phys_viz}")
+
+            pin_states = {i: ((self.logical_mask >> self.pin_mappings[i][0]) & 1) ^ self.pin_mappings[i][1] for i in range(12)}
+            self.broadcast_socket.sendto(json.dumps(pin_states).encode(), ("127.0.0.1", self.broadcast_port))
             
             time.sleep(duration_ticks * self.TICK_SEC)
             

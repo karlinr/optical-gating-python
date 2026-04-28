@@ -16,6 +16,8 @@ class CameraConfig:
     box_pins: List[int] = field(default_factory=list)
 
 class Config:
+    EMULATE_CAMERA = True  # Whether to use the camera emulator or real hardware
+
     # Timing box and pin mapping
     class TimingBox:
         PORT = 'COM6'

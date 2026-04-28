@@ -2,8 +2,12 @@ import logging
 import time
 
 from interfaces.timing_box import TimingBox
-from interfaces.camera import XimeaCamera
 from app.config import Config
+
+if Config.EMULATE_CAMERA:
+    from hardware_emulators.camera import CameraEmulator as XimeaCamera
+else:
+    from interfaces.camera import XimeaCamera
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
