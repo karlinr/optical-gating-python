@@ -25,11 +25,11 @@ from app.config import Config
 class TimingBoxEmulator:
     TICK_SEC = 2.56e-6
     # ANSI Color Codes
-    CLR_ACTIVE = "\033[1;32m"  # Bold Green
-    CLR_INACTIVE = "\033[2;90m" # Dim Grey
-    CLR_RESET = "\033[0m"      # Reset formatting
-    CLR_CMD = "\033[1;34m"        # Bold Blue for commands
-    CLR_DATA = "\033[1;36m"       # Bold Cyan for data
+    CLR_ACTIVE = ""#"\033[1;32m"  # Bold Green
+    CLR_INACTIVE = ""#"\033[2;90m" # Dim Grey
+    CLR_RESET = ""#"\033[0m"      # Reset formatting
+    CLR_CMD = ""#"\033[1;34m"        # Bold Blue for commands
+    CLR_DATA = ""#"\033[1;36m"       # Bold Cyan for data
 
     CMDS = {
         "SET_PIANOLA": 0x01,
@@ -93,19 +93,19 @@ class TimingBoxEmulator:
                 
                 if is_active:
                     # Active: Bold Green with brackets
-                    phys_viz += f"{self.CLR_ACTIVE}[{phys_idx:02d}]{self.CLR_RESET} "
-                else:
-                    # Inactive: Dim Grey
-                    phys_viz += f"{self.CLR_INACTIVE} {phys_idx:02d} {self.CLR_RESET} "
+                    phys_viz += f"{self.CLR_ACTIVE}{phys_idx:02d}{self.CLR_RESET} "
+                #else:
+                #    # Inactive: Dim Grey
+                #    phys_viz += f"{self.CLR_INACTIVE} {phys_idx:02d} {self.CLR_RESET} "
             
             # Construct Logical Bit Visualization
             log_viz = ""
             for i in range(8):
                 if (self.logical_mask >> i) & 1:
                     log_viz += f"{self.CLR_ACTIVE}{i}{self.CLR_RESET}"
-                else:
-                    log_viz += f"{self.CLR_INACTIVE}{i}{self.CLR_RESET}"
-            print(f"STEP {current_step:02d} | LOGIC: {log_viz} | PHYS: {phys_viz}")
+                #else:
+                #    log_viz += f"{self.CLR_INACTIVE}{i}{self.CLR_RESET}"
+            logger.info(f"STEP {current_step:02d} | LOGIC: {log_viz} | PHYS: {phys_viz}")
 
             pin_states = {i: ((self.logical_mask >> self.pin_mappings[i][0]) & 1) ^ self.pin_mappings[i][1] for i in range(12)}
             self.broadcast_socket.sendto(json.dumps(pin_states).encode(), ("127.0.0.1", self.broadcast_port))
@@ -122,7 +122,7 @@ class TimingBoxEmulator:
         
         self.logical_mask = 0
         self.is_running = False
-        print(f"\n{self.CLR_RESET}[EMU] Sequence execution finished.")
+        logger.info(f"\n{self.CLR_RESET}[EMU] Sequence execution finished.")
 
     def handle_command(self, cmd):
         if cmd == self.CMDS["HARD_RESET"]: # HARD_RESET
