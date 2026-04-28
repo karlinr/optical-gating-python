@@ -265,7 +265,7 @@ class MLEEstimator(PhaseEstimator):
             if count_per_bin[i] > 1:
                 self.noise_estimate[i] /= (count_per_bin[i] - 1)
             else:
-                self.noise_estimate[i] = np.ones_like(self.noise_estimate[i]) * 1e-6
+                self.noise_estimate[i] = np.ones_like(self.noise_estimate[i]) * Config.Gating.MLE_MIN_NOISE
 
         logger.info("MLE Estimator model built. Ready for estimation.")
         # Print out stats about binned frames
@@ -295,6 +295,20 @@ class MLEEstimator(PhaseEstimator):
             score = denom 
         else:
             offset, score = 0.0, 0.0
+
+        # Do a parabolic fit around the best bin to get a sub-bin phase estimate
+        fit_points = Config.Gating.MLE_FIT_POINTS
+        from numpy.polynomial import Polynomial
+        x = np.arange(-fit_points, fit_points + 1)
+        y_fit = scores[(best_idx - fit_points) % n_bins : (best_idx + fit_points + 1) % n_bins]
+        if len(y_fit) < 2 * fit_points + 1:
+            # Handle wrap-around case
+            y_fit = np.concatenate((scores[best_idx - fit_points:], scores[:best_idx + fit_points + 1 - n_bins]))
+        p = Polynomial.fit(x, y_fit, 2)
+        vertex = -p.coef[1] / (2 * p.coef[2]) if p.coef[2] != 0 else 0
+        offset += vertex
+
+        print(f"MLE Estimate: Best Bin={best_idx}, Offset={offset:.2f}, Score={score:.2f}")
 
         phase_radians = ((best_idx + offset) % n_bins / n_bins) * TWO_PI
         return phase_radians, score
