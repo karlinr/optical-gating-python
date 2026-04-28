@@ -37,7 +37,8 @@ def main():
             time_ticks = controller.timestamp_to_ticks(timestamp)
 
             # Get phase estimate
-            phase_manager.update(frame)
+            results = phase_manager.update(frame, timestamp = timestamp)
+            logger.info(f"Status: {results["status"]}")
 
             # Do prediction
             # Not implemented yet

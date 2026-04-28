@@ -85,7 +85,10 @@ class Config:
         LOG_ALL = True
 
         # SAD parameters
-        SAD_REFERENCE_LENGTH = 20
+        MIN_PERIOD = 5
+        LOWER_THRESHOLD_FACTOR = 0.5
+        UPPER_THRESHOLD_FACTOR = 0.75
+        MIN_HEART_RATE_HZ = 0.5
 
         # MLE parameters
         MLE_BOOTSTRAP_FRAMES = 1000
