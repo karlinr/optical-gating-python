@@ -1,8 +1,5 @@
-import logging
+from loguru import logger
 import ximea.xiapi as xiapi
-
-logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
-logger = logging.getLogger("Camera")
 
 class XimeaCamera:
     """

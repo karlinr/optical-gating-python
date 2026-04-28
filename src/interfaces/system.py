@@ -1,4 +1,4 @@
-import logging
+from loguru import logger
 import time
 
 from interfaces.timing_box import TimingBox
@@ -8,10 +8,6 @@ if Config.EMULATE_CAMERA:
     from hardware_emulators.camera import CameraEmulator as XimeaCamera
 else:
     from interfaces.camera import XimeaCamera
-
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
-logger = logging.getLogger("SystemController")
 
 class SystemController:
     def __init__(self):

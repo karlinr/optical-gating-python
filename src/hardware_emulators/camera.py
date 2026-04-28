@@ -1,13 +1,11 @@
 # src/hardware_emulators/camera.py
-import logging
+from loguru import logger
 import threading
 import time
 import queue
 import socket
 import json
 import numpy as np
-
-logger = logging.getLogger("CameraEmulator")
 
 class CameraEmulator:
     def __init__(self):

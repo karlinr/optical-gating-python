@@ -1,5 +1,6 @@
 from numba import njit, prange
 import numpy as np
+from loguru import logger
 
 def v_fitting(y_1, y_2, y_3):
     """

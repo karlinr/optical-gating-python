@@ -1,12 +1,8 @@
 import serial
-import logging
+from loguru import logger
 import time
 
 from app.config import Config
-
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
-logger = logging.getLogger("TimingBox")
 
 class TimingBox:
     TICK_SEC = 2.56e-6

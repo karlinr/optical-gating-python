@@ -2,17 +2,25 @@
 Emulates the timing box. Should be run in a separate process and will listen for commands on the specified serial port. It simulates the internal clock, hardware registers, and pin outputs of the timing box, allowing for testing and development without the physical hardware.
 """
 
+import sys
+
 import serial
 import time
-import logging
+from loguru import logger
 import threading
 import json
 import socket
 
-from app.config import Config
+# 1. Remove default handlers
+logger.remove()
 
-logging.basicConfig(level=logging.INFO, format='[EMU] %(message)s')
-logger = logging.getLogger("Emulator")
+# 2. Add console handler (stdout)
+logger.add(sys.stderr, level="INFO", format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>")
+
+# 3. Add file handler (rotates every 10MB)
+logger.add("logs/emulator/experiment_{time}.log", rotation="10 MB", level="DEBUG", retention="10 days")
+
+from app.config import Config
 
 class TimingBoxEmulator:
     TICK_SEC = 2.56e-6
@@ -43,6 +51,7 @@ class TimingBoxEmulator:
         self.ser = serial.Serial(self.port, 115200, timeout=0.01) # Low timeout for responsiveness
         self.running_thread = None
         self.stop_signal = threading.Event()
+        self.broadcast_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.broadcast_port = 5005
         self.reset_state()
 

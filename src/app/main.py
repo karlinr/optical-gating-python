@@ -1,15 +1,19 @@
-import logging
+import sys
+from loguru import logger
 
 from interfaces.system import SystemController
 from app.config import Config
 
 from logic.phase_estimator import PhaseManager
 
-import matplotlib.pyplot as plt
+# 1. Remove default handlers
+logger.remove()
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
-logger = logging.getLogger("Main")
+# 2. Add console handler (stdout)
+logger.add(sys.stderr, level="INFO", format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>")
+
+# 3. Add file handler (rotates every 10MB)
+logger.add("logs/main/experiment_{time}.log", rotation="10 MB", level="DEBUG", retention="10 days")
 
 def main():
     controller = SystemController()
@@ -33,7 +37,7 @@ def main():
             time_ticks = controller.timestamp_to_ticks(timestamp)
 
             # Get phase estimate
-            print(phase_manager.update(frame))
+            phase_manager.update(frame)
 
             # Do prediction
             # Not implemented yet
