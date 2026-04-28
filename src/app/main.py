@@ -1,6 +1,6 @@
 import logging
 
-from hardware.system import SystemController
+from interfaces.system import SystemController
 from app.config import Config
 
 from logic.phase_estimator import PhaseManager

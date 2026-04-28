@@ -1,8 +1,8 @@
 import logging
 import time
 
-from hardware.timing_box import TimingBox
-from hardware.camera import XimeaCamera
+from interfaces.timing_box import TimingBox
+from interfaces.camera import XimeaCamera
 from app.config import Config
 
 # Configure logging

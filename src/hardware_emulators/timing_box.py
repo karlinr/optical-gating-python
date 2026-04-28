@@ -1,3 +1,7 @@
+"""
+Emulates the timing box. Should be run in a separate process and will listen for commands on the specified serial port. It simulates the internal clock, hardware registers, and pin outputs of the timing box, allowing for testing and development without the physical hardware.
+"""
+
 import serial
 import time
 import logging
