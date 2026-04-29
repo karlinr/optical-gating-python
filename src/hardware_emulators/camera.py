@@ -51,12 +51,12 @@ class CameraEmulator:
                     continue
             else:
                 # Simulate frame rate delay
-                time.sleep(1/60) 
+                time.sleep(1/80) 
                 self._push_frame()
 
     def _push_frame(self):
         t = time.time()
-        freq = 0.5  # 0.5 Hz = 2 second period
+        freq = 2  # 0.5 Hz = 2 second period
         
         # Calculate oscillating sizes (sigma)
         # base size of 25 pixels, oscillating by +/- 10
@@ -83,10 +83,7 @@ class CameraEmulator:
             self.frame_queue.put((frame, t))
 
     def get_latest_frame(self, timeout_ms=1000):
-        try:
-            return self.frame_queue.get(timeout=timeout_ms/1000.0)
-        except queue.Empty:
-            return np.zeros((512, 512)), time.time()
+        return self.frame_queue.get(timeout=timeout_ms/1000.0)
 
     def stop_acquisition(self):
         self.is_running = False

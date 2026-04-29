@@ -61,7 +61,7 @@ def sad_with_references(test_frame, reference_stack):
 
     sad_scores = np.zeros(n_refs)
 
-    frame_flat = test_frame.ravel()
+    frame_flat = test_frame.ravel().astype(np.float32)
     for i in prange(n_refs):
         ref_flat = reference_stack[i].ravel()
         sad_scores[i] = np.sum(np.abs(frame_flat - ref_flat))
