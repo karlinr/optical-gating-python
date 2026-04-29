@@ -10,7 +10,8 @@ else:
     from interfaces.camera import XimeaCamera
 
 class SystemController:
-    def __init__(self):
+    def __init__(self, app_state):
+        self.app_state = app_state
         self.timing_box = TimingBox(port = Config.TimingBox.PORT)
         self.bf_cam = XimeaCamera()
         self.fl_cam = XimeaCamera()
@@ -114,8 +115,11 @@ class SystemController:
         """
         Retrieves the latest frame and timestamp from the brightfield camera.
         """
-        return self.bf_cam.get_latest_frame()
-    
+        frame, timestamp = self.bf_cam.get_latest_frame()
+        self.app_state.send_event("NEW_BF_FRAME", timestamp)
+        self.app_state.update_frame(frame)
+        return frame, timestamp
+
     def trigger_fl_frame(self, timestamp: float):
         """Schedules a fluorescence trigger with safety checks for wrap-around."""
         target_tick = self.timestamp_to_ticks(timestamp)

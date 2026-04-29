@@ -3,6 +3,7 @@ from loguru import logger
 
 from interfaces.system import SystemController
 from app.config import Config
+from app.state import AppState
 
 from logic.phase_estimator import PhaseManager
 
@@ -16,7 +17,8 @@ logger.add(sys.stderr, level="INFO", format="<green>{time:HH:mm:ss}</green> | <l
 logger.add("logs/main/experiment_{time}.log", rotation="10 MB", level="DEBUG", retention="10 days")
 
 def main():
-    controller = SystemController()
+    app_state = AppState()
+    controller = SystemController(app_state = app_state)
 
     try:
         controller.connect_all()
@@ -29,7 +31,7 @@ def main():
         controller.setup_timing_box_for_experiment()
         logger.info("Hardware setup for experiment complete. Ready to run.")
 
-        phase_manager = PhaseManager()
+        phase_manager = PhaseManager(app_state = app_state)
 
         while True:
             frame, timestamp = controller.get_latest_bf_frame()

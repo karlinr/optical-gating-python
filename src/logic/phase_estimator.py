@@ -283,7 +283,8 @@ class MLEEstimator(PhaseEstimator):
         return phase_radians, score
     
 class PhaseManager:
-    def __init__(self):
+    def __init__(self, app_state):
+        self.app_state = app_state
         self.sad = SADEstimator()
         self.mle = MLEEstimator()
 
@@ -305,6 +306,8 @@ class PhaseManager:
             
             if sad_calculation_needed:
                 phase_sad, score_sad = self.sad.estimate(frame)
+
+                self.app_state.send_event("SAD_RESULTS", {"phase": phase_sad, "score": score_sad})
                 
                 if source == "SAD" or log_all:
                     results["sad"] = {"phase": phase_sad, "score": score_sad}
@@ -314,8 +317,11 @@ class PhaseManager:
 
         if self.mle.is_ready() and mle_required:
             phase_mle, score_mle = self.mle.estimate(frame)
+            self.app_state.send_event("MLE_RESULTS", {"phase": phase_mle, "score": score_mle})
             results["mle"] = {"phase": phase_mle, "score": score_mle}
             status = "READY"
 
         results["status"] = status
+
+        self.app_state.send_event("ESTIMATOR_STATUS", {"status": status})
         return results
