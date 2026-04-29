@@ -211,36 +211,42 @@ class MLEEstimator(PhaseEstimator):
     def build_model(self):
         # Again, needs to be copied over from my main code.
         # This will bin frames by phase and estimating pixel-wise mean and variance for each bin.
-        # The binned frames will be of shape (n_bins, height, width) and the noise estimate will be of shape (n_bins, height, width)
+        # The binned frames will be of shape (n_bins, height, width) and the noise estimate will be of shape (n_bins, height, width)       
         n_bins = Config.Gating.MLE_BINS
-        self.binned_frames = np.zeros((n_bins, *self.frame_history[0][0].shape), dtype=np.float32)
-        count_per_bin = np.zeros(n_bins, dtype=np.int32)
-        for frame, phase in self.frame_history:
-            bin_idx = int((phase / TWO_PI) * n_bins) % n_bins
-            self.binned_frames[bin_idx] += frame
-            count_per_bin[bin_idx] += 1
-        for i in range(n_bins):
-            if count_per_bin[i] > 0:
-                self.binned_frames[i] /= count_per_bin[i]
-        # Estimate noise as the variance within each bin
-        self.noise_estimate = np.zeros_like(self.binned_frames)
-        for frame, phase in self.frame_history:
-            bin_idx = int((phase / TWO_PI) * n_bins) % n_bins
-            self.noise_estimate[bin_idx] += (frame - self.binned_frames[bin_idx]) ** 2
-        for i in range(n_bins):
-            if count_per_bin[i] > 1:
-                self.noise_estimate[i] /= (count_per_bin[i] - 1)
+        frames = np.stack([h[0] for h in self.frame_history])
+        phases = np.array([h[1] for h in self.frame_history])
+
+        from matplotlib import pyplot as plt
+        plt.plot(phases, 'o')
+        plt.show()
+
+        bins = np.linspace(0, TWO_PI, n_bins + 1)
+        bin_indices = np.digitize(phases, bins) - 1
+        bin_indices[bin_indices == n_bins] = 0
+
+        # Print number of frames in each bin for debugging
+        logger.info(f"Frame count per bin: {np.bincount(bin_indices, minlength=n_bins)}")
+
+        frame_shape = frames[0].shape
+        self.binned_frames = np.zeros((n_bins, *frame_shape), dtype=np.float32)
+        self.noise_estimates = np.zeros((n_bins, *frame_shape), dtype=np.float32)
+
+        for b in range(n_bins):
+            mask = (bin_indices == b)
+
+            self.binned_frames[b] = np.mean(frames[mask], axis=0) if np.any(mask) else np.zeros(frame_shape, dtype=np.float32)
+
+            if len(frames[mask]) > 1:
+                order = np.argsort(phases[mask])
+                sorted_frames = frames[mask][order]
+                diffs = np.diff(sorted_frames, axis=0)
+                self.noise_estimate[b] = np.sum(diffs ** 2, axis=0) / (len(frames[mask]) - 1)
             else:
-                self.noise_estimate[i] = np.ones_like(self.noise_estimate[i]) * Config.Gating.MLE_MIN_NOISE
+                logger.warning(f"Bin {b} has only one frame. Setting noise estimate to default value.")
+                self.noise_estimate[b] = np.ones(frame_shape, dtype=np.float32) * Config.Gating.MLE_MIN_NOISE
 
         logger.info("MLE Estimator model built. Ready for estimation.")
-        # Print out stats about binned frames
-        for i in range(n_bins):
-            logger.info(f"Bin {i}: Count={count_per_bin[i]}, Mean Pixel Value={np.mean(self.binned_frames[i]):.2f}, Mean Noise={np.mean(self.noise_estimate[i]):.2f}")
-        
-        
-
-
+     
         self._ready = True
         self.frame_history = [] # Clear history to save memory after build
 
