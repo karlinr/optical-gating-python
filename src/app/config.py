@@ -89,8 +89,8 @@ class Gating:
     MIN_HEART_RATE_HZ = 0.5
 
     # MLE parameters
-    MLE_BOOTSTRAP_FRAMES = 1000
-    MLE_BINS = 50
+    MLE_BOOTSTRAP_FRAMES = 500
+    MLE_BINS = 40
     MLE_MIN_NOISE = 1
     MLE_FIT_POINTS = 5
 
