@@ -30,9 +30,11 @@ src/
 - Camera and timing box emulators for testing
 - Phase estimation using SAD method
 - Thread safe state manager for eventual future UI integration
-## Partially implemented
 - Phase estimation using MLE method
+## Partially implemented
 ## Not implemented
 - Phase prediction
 - Fluorescence camera triggering
 - Drift correction
+- Stage controls
+- User interface
