@@ -90,7 +90,7 @@ class Gating:
 
     # MLE parameters
     MLE_BOOTSTRAP_FRAMES = 1000
-    MLE_BINS = 100
+    MLE_BINS = 50
     MLE_MIN_NOISE = 1
     MLE_FIT_POINTS = 5
 
