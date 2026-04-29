@@ -104,13 +104,14 @@ class SADEstimator(PhaseEstimator):
             
             start = len(past_frames) - num_refs
             stop = len(past_frames)
+
             return start, stop, period_to_use
 
         return None, None, None
 
     def _calculate_period_length(self, diffs):
         """Interpolated period search based on threshold factors."""
-        if diffs.size < Config.Gating.MIN_PERIOD:
+        if diffs.size < 1:
             return -1
 
         min_score = max_score = diffs[-1]
@@ -216,20 +217,16 @@ class MLEEstimator(PhaseEstimator):
         frames = np.stack([h[0] for h in self.frame_history])
         phases = np.array([h[1] for h in self.frame_history])
 
-        from matplotlib import pyplot as plt
-        plt.plot(phases, 'o')
-        plt.show()
-
         bins = np.linspace(0, TWO_PI, n_bins + 1)
         bin_indices = np.digitize(phases, bins) - 1
         bin_indices[bin_indices == n_bins] = 0
 
         # Print number of frames in each bin for debugging
-        logger.info(f"Frame count per bin: {np.bincount(bin_indices, minlength=n_bins)}")
+        logger.info(f"Frame count per bin: \n{np.bincount(bin_indices, minlength=n_bins)}")
 
         frame_shape = frames[0].shape
         self.binned_frames = np.zeros((n_bins, *frame_shape), dtype=np.float32)
-        self.noise_estimates = np.zeros((n_bins, *frame_shape), dtype=np.float32)
+        self.noise_estimate = np.zeros((n_bins, *frame_shape), dtype=np.float32)
 
         for b in range(n_bins):
             mask = (bin_indices == b)
