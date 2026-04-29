@@ -38,7 +38,8 @@ class SystemController:
         self.bf_cam.set_mode_hardware_trigger(cam_trigger_pin = Config.Cameras.BF.trigger_pin)
 
         # Setup timing box trigger to trigger both cameras simultaneously
-        self.timing_box.map_pin(Config.TimingBox.Physical.BF, Config.TimingBox.Logical.BF)  # Map physical pin to logical bit (camera trigger)
+        #self.timing_box.map_pin(Config.TimingBox.Physical.BF, Config.TimingBox.Logical.BF)  # Map physical pin to logical bit (camera trigger)
+        self._apply_camera_pin_mappings(Config.Cameras.BF)
 
         # Now we want to trigger the brightfield camera twice, 1 second apart, and measure the timestamps and timing box ticks to work out the conversion factor
         # First setup our pianola memory to trigger the camera immediately and then 1 second later
@@ -88,13 +89,13 @@ class SystemController:
     def setup_timing_box_for_experiment(self):
         """
         Configures the timing box for the experiment.
-        We need to setup pin mappings
-        and upload the pianola sequence that will be used to trigger the fl camera during the experiment.
+        We need to setup pin mappings and upload the pianola sequence that will be used to trigger the fl camera during the experiment.
         """
         self.timing_box.stop()
 
         # Use the pin mapping from the config
-        self.timing_box.map_pin(Config.TimingBox.Physical.FL_1, Config.TimingBox.Logical.FL_1)
+        #self.timing_box.map_pin(Config.TimingBox.Physical.FL_1, Config.TimingBox.Logical.FL_1)
+        self._apply_camera_pin_mappings(Config.Cameras.FL)
 
         # Upload the pianola sequence that will be used to trigger the fluorescence camera during the experiment
         # We should only have to do this once since we can use fire_at() to schedule it at the correct times during the experiment
@@ -102,6 +103,12 @@ class SystemController:
         self.timing_box.add_step([], duration_ticks=TimingBox.to_24bit(0.9 / self.timing_box.TICK_SEC))  # Wait for 0.9 seconds (total 1 second from first trigger)
         self.timing_box.finalize_sequence(repeat = False)
 
+    def _apply_camera_pin_mappings(self, cam_config):
+        for logical_bit in cam_config.box_pins:
+            pin_name = Config.TimingBox.Logical(logical_bit).name
+            physical_pin = Config.TimingBox.Physical[pin_name]
+            self.timing_box.map_pin(physical_pin, logical_bit)
+            logger.info(f"Mapped camera '{cam_config.label}' to Timing Box pin {physical_pin} (logical bit {logical_bit})")
 
     def get_latest_bf_frame(self):
         """
