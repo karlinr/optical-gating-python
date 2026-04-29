@@ -20,8 +20,8 @@ class SystemController:
         Connects to the timing box and both cameras.
         """
         self.timing_box.connect()
-        self.bf_cam.connect(serial_number = Config.BF.serial)
-        self.fl_cam.connect(serial_number = Config.FL.serial)
+        self.bf_cam.connect(serial_number = Config.Cameras.BF.serial)
+        self.fl_cam.connect(serial_number = Config.Cameras.FL.serial)
 
     def synchronise_camera(self):
         """
@@ -35,7 +35,7 @@ class SystemController:
         wait_ticks = TimingBox.to_24bit(0.9 / self.timing_box.TICK_SEC)   # 900 ms wait duration in timing box ticks (total 1 second cycle)
         total_time = pulse_ticks + wait_ticks
 
-        self.bf_cam.set_mode_hardware_trigger(cam_trigger_pin = Config.BF.trigger_pin)
+        self.bf_cam.set_mode_hardware_trigger(cam_trigger_pin = Config.Cameras.BF.trigger_pin)
 
         # Setup timing box trigger to trigger both cameras simultaneously
         self.timing_box.map_pin(Config.TimingBox.Physical.BF, Config.TimingBox.Logical.BF)  # Map physical pin to logical bit (camera trigger)
@@ -82,8 +82,8 @@ class SystemController:
         The brightfield camera is set to continuous (framerate) mode since we want it to run freely and provide timestamps.
         The fluorescence camera is set to hardware trigger mode since we only want it to capture frames when triggered by the timing box.
         """
-        self.bf_cam.set_mode_continuous(framerate=Config.BF.framerate)
-        self.fl_cam.set_mode_hardware_trigger(cam_trigger_pin = Config.FL.trigger_pin)
+        self.bf_cam.set_mode_continuous(framerate=Config.Cameras.BF.framerate)
+        self.fl_cam.set_mode_hardware_trigger(cam_trigger_pin = Config.Cameras.FL.trigger_pin)
 
     def setup_timing_box_for_experiment(self):
         """

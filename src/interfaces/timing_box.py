@@ -174,6 +174,27 @@ class TimingBox:
     def is_future_tick(target: int, current: int) -> bool:
         """Determines if a target is ahead of the current clock using half-range logic."""
         return TimingBox.get_tick_diff(target, current) < TimingBox.HALF_RANGE
+    
+    @staticmethod
+    def is_past_tick(target: int, current: int) -> bool:
+        """Determines if a target is behind the current clock using half-range logic."""
+        return TimingBox.get_tick_diff(target, current) >= TimingBox.HALF_RANGE
+    
+    @staticmethod
+    def ticks_to_seconds(ticks: int) -> float:
+        """Converts ticks to seconds."""
+        return ticks * TimingBox.TICK_SEC
+    
+    @staticmethod
+    def seconds_to_ticks(seconds: float) -> int:
+        """Converts seconds to ticks."""
+        return int(seconds / TimingBox.TICK_SEC)
+    
+    @staticmethod
+    def format_tick_time(ticks: int) -> str:
+        """Formats a tick count into a human-readable string with seconds and ticks."""
+        seconds = ticks * TimingBox.TICK_SEC
+        return f"{seconds:.6f}s ({ticks} ticks)"
 
 if __name__ == "__main__":
     
