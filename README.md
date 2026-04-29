@@ -3,6 +3,7 @@
 Implementing prospective optical gating in Python. Primarily for testing the new MLE approach to prospective optical gating phase estimation and integration of the Kalman filter for improved prediction.
 
 # Structure
+```text
 src/
 ├── app/
 │   ├── config.py          # Central configuration (cameras, timing box, gating params)
@@ -19,6 +20,7 @@ src/
 └── hardware_emulators/
     ├── camera.py          # Software camera emulator (generates synthetic heart frames)
     └── timing_box.py      # Software timing box emulator (runs in a separate process)
+```
 
 # WIP
 ## Implemented
