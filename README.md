@@ -32,8 +32,8 @@ src/
 - Thread safe state manager for eventual future UI integration
 - Phase estimation using MLE method
 ## Partially implemented
+- Phase prediction: basic barrier prediction implemented - need to compare to open-optical-gating implementation. Still need to implement KF prediction
 ## Not implemented
-- Phase prediction
 - Fluorescence camera triggering
 - Drift correction
 - Stage controls
