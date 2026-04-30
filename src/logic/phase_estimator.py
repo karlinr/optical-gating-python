@@ -211,7 +211,9 @@ class MLEEstimator(PhaseEstimator):
         else:
             return "MLE_COLLECTING_FRAMES"
 
-    def build_model(self):   
+    def build_model(self):
+        # TODO: Check we are handling the loop around correctly.
+
         n_bins = Config.Gating.MLE_BINS
         frames = np.stack([h[0] for h in self.frame_history])
         phases = np.array([h[1] for h in self.frame_history])

@@ -41,7 +41,8 @@ def main():
 
         app_state.set_state(ExperimentState.RUNNING_EXPERIMENT)
 
-        phase_history = []
+        sad_phase_history = []
+        mle_phase_history = []
         timestamp_history = []
         predicted_time_history = []
         for i in range(1000):
@@ -51,19 +52,18 @@ def main():
 
             # Get phase estimate
             results = phase_manager.update(frame, timestamp = timestamp)
-            phase_history.append(results.get("sad", {}).get("phase", None))
+            sad_phase_history.append(results.get("sad", {}).get("phase", None))
+            mle_phase_history.append(results.get("mle", {}).get("phase", None))
             timestamp_history.append(timestamp)
             logger.info(f"Status: {results["status"]}")
 
+            # Do prediction
             if results["status"] == "READY":
                 current_phase = results["sad"]["phase"]
                 phase_predictor.update_phase(current_phase, time_ticks)
                 predicted_time = phase_predictor.predict_target_time(np.pi, 0)
                 if predicted_time is not None:
                     predicted_time_history.append(predicted_time)
-
-            # Do prediction
-            # Not implemented yet
 
             # Decide whether to fire
             # Not implemented yet
@@ -77,7 +77,8 @@ def main():
         import matplotlib.pyplot as plt
         plt.figure(figsize=(12, 6))
         plt.subplot(2, 1, 1)
-        plt.plot(timestamp_history, phase_history, label="Estimated Phase (SAD)")
+        plt.plot(timestamp_history, sad_phase_history, label="Estimated Phase (SAD)")
+        plt.plot(timestamp_history, mle_phase_history, label="Estimated Phase (MLE)")
         plt.xlabel("Time (s)")
         plt.ylabel("Phase (radians)")
         plt.title("Phase Estimation Over Time")
@@ -90,7 +91,13 @@ def main():
         plt.legend()
         plt.tight_layout()
         plt.show()
-        
+
+        unwrapped_phases = np.unwrap(np.array(sad_phase_history)[np.where(np.array(sad_phase_history) != None)])
+        delta_phases = np.diff(unwrapped_phases)
+
+        plt.scatter(np.array(sad_phase_history)[np.where(np.array(sad_phase_history) != None)][1:], delta_phases)
+        plt.show()
+
     except KeyboardInterrupt:
         logger.info("Experiment interrupted by user. Shutting down.")
     except Exception as e:

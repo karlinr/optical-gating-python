@@ -80,7 +80,7 @@ class Gating:
     PREDICTION_METHOD = "BARRIER"
 
     # Whether we should log all phase estimates or just the PHASE_SOURCE one
-    LOG_ALL = False
+    LOG_ALL = True
 
     # SAD parameters
     MIN_PERIOD = 5
