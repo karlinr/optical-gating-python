@@ -7,7 +7,8 @@ Implementing prospective optical gating in Python. Primarily for testing the new
 src/
 ├── app/
 │   ├── config.py          # Central configuration (cameras, timing box, gating params)
-│   └── main.py            # Entry point — orchestrates the experiment loop
+│   ├── main.py            # Entry point — orchestrates the experiment loop
+│   └── state.py           # Thread safe state manager for eventual future UI integration
 ├── interfaces/
 │   ├── camera.py          # Ximea camera driver
 │   ├── timing_box.py      # Serial interface to the timing box
@@ -28,9 +29,12 @@ src/
 - Timing box hardware integration
 - Camera and timing box emulators for testing
 - Phase estimation using SAD method
-## Partially implemented
+- Thread safe state manager for eventual future UI integration
 - Phase estimation using MLE method
+## Partially implemented
 ## Not implemented
 - Phase prediction
 - Fluorescence camera triggering
 - Drift correction
+- Stage controls
+- User interface

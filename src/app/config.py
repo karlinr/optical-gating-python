@@ -94,6 +94,11 @@ class Gating:
     MLE_MIN_NOISE = 1
     MLE_FIT_POINTS = 5
 
+    # Barrier prediction parameters
+    PHASE_HISTORY_LENGTH = 100
+    MIN_FRAMES_FOR_PREDICTION = 10
+    MIN_HISTORY_FOR_PREDICTION = 50
+
 class Config:
     EMULATE_CAMERA = True  # Whether to use the camera emulator or real hardware
 
