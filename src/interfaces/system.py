@@ -117,14 +117,9 @@ class SystemController:
         """
         Retrieves the latest frame and timestamp from the brightfield camera.
         """
-
-
         frame, timestamp = self.bf_cam.get_latest_frame()
         self.app_state.send_event("NEW_BF_FRAME", timestamp)
         self.app_state.update_frame(frame)
-
-        print(f"Framerate: {1/(timestamp - self.last_timestamp):.2f} FPS")
-        self.last_timestamp = timestamp
         return frame, timestamp
 
     def trigger_fl_frame(self, timestamp: float):

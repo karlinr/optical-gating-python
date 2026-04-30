@@ -188,7 +188,7 @@ class SADEstimator(PhaseEstimator):
         offset, score = v_fitting(scores[best_idx - 1], scores[best_idx], scores[best_idx + 1])
         phase = ((best_idx + offset - NUM_EXTRA_REF_FRAMES) / self.reference_period) * TWO_PI
 
-        print(f"SAD Estimate: Best Index={best_idx}, Offset={offset:.2f}, Score={score:.2f}")
+        logger.info(f"SAD Estimate: Best Index={best_idx}, Offset={offset:.2f}, Score={score:.2f}")
         
         return phase % TWO_PI, score
     
@@ -249,38 +249,32 @@ class MLEEstimator(PhaseEstimator):
         self.frame_history = [] # Clear history to save memory after build
 
     def estimate(self, frame):
+        # Calculate chi-squared scores
         scores = chi_sq(frame, self.binned_frames, self.noise_estimate)
         n_bins = len(scores)
         best_idx = np.argmin(scores)
+        score = scores[best_idx]  # Define the minimum score
 
-        y = np.array([
-            scores[(best_idx - 1) % n_bins], 
-            scores[best_idx], 
-            scores[(best_idx + 1) % n_bins]
-        ])
-
-        denom = (y[0] - 2 * y[1] + y[2])
-        if denom > 0:
-            offset = 0.5 * (y[0] - y[2]) / denom
-            score = denom 
-        else:
-            offset, score = 0.0, 0.0
-
-        # Do a parabolic fit around the best bin to get a sub-bin phase estimate
         fit_points = Config.Gating.MLE_FIT_POINTS
-        from numpy.polynomial import Polynomial
+        
         x = np.arange(-fit_points, fit_points + 1)
-        y_fit = scores[(best_idx - fit_points) % n_bins : (best_idx + fit_points + 1) % n_bins]
-        if len(y_fit) < 2 * fit_points + 1:
-            # Handle wrap-around case
-            y_fit = np.concatenate((scores[best_idx - fit_points:], scores[:best_idx + fit_points + 1 - n_bins]))
-        p = Polynomial.fit(x, y_fit, 2)
-        vertex = -p.coef[1] / (2 * p.coef[2]) if p.coef[2] != 0 else 0
-        offset += vertex
+        indices = np.arange(best_idx - fit_points, best_idx + fit_points + 1)
+        y_fit = np.take(scores, indices, mode='wrap')
 
-        print(f"MLE Estimate: Best Bin={best_idx}, Offset={offset:.2f}, Score={score:.2f}")
+        try:
+            coeffs = np.polyfit(x, y_fit, 2)
+            a, b = coeffs[0], coeffs[1]
+            
+            # The vertex of a parabola is at x = -b / 2a
+            vertex_offset = -b / (2 * a) if a != 0 else 0
+        except (np.linalg.LinAlgError, TypeError):
+            vertex_offset = 0
+            logger.warning("MLE parabola fitting failed. Defaulting vertex offset to 0.")
 
-        phase_radians = ((best_idx + offset) % n_bins / n_bins) * TWO_PI
+        logger.info(f"MLE Estimate: Best Bin={best_idx}, Offset={vertex_offset:.2f}, Score={score:.2f}")
+
+        phase_radians = ((best_idx + vertex_offset) % n_bins / n_bins) * TWO_PI
+        
         return phase_radians, score
     
 class PhaseManager:

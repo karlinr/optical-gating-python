@@ -13,6 +13,8 @@ logger.remove()
 logger.add(sys.stderr, level="INFO", format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>")
 logger.add("logs/main/experiment_{time}.log", rotation="10 MB", level="DEBUG", retention="10 days")
 
+# Key note to self: We primarily use the BF time as the current timestamp and only convert to ticks when sending commands to the timing box 
+
 def main():
     app_state = AppState()
     controller = SystemController(app_state = app_state)
@@ -40,10 +42,8 @@ def main():
         mle_phase_history = []
         timestamp_history = []
         predicted_time_history = []
-        for i in range(1000):
+        for i in range(5000):
             frame, timestamp = controller.get_latest_bf_frame()
-            # Convert time to ticks
-            time_ticks = controller.timestamp_to_ticks(timestamp)
 
             # Get phase estimate
             results = phase_manager.update(frame, timestamp = timestamp)
@@ -55,7 +55,7 @@ def main():
             # Do prediction
             if results["status"] == "READY":
                 current_phase = results["sad"]["phase"]
-                phase_predictor.update_phase(current_phase, time_ticks)
+                phase_predictor.update_phase(current_phase, timestamp)
                 predicted_time = phase_predictor.predict_target_time(np.pi, 0)
                 if predicted_time is not None:
                     predicted_time_history.append(predicted_time)

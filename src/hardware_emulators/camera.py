@@ -16,6 +16,8 @@ class CameraEmulator:
         self.frame_queue = queue.Queue(maxsize=1)
         self._stop_event = threading.Event()
 
+        self.t0 = time.perf_counter()
+
         self.x_coord = np.arange(512)
         self.y_coord = np.arange(512)
         self.X, self.Y = np.meshgrid(self.x_coord, self.y_coord)
@@ -55,7 +57,7 @@ class CameraEmulator:
                 self._push_frame()
 
     def _push_frame(self):
-        t = time.time()
+        t = time.perf_counter() - self.t0
         freq = 2  # 0.5 Hz = 2 second period
         
         # Calculate oscillating sizes (sigma)
@@ -102,6 +104,7 @@ class CameraEmulator:
         self.start_acquisition()
 
     def close(self):
+        self.sock.close()
         self.is_running = False
         self._stop_event.set()
         logger.info(f"Emulator Camera SN {self.serial_number} closed.")
