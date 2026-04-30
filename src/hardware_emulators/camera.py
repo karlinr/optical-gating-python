@@ -74,7 +74,7 @@ class CameraEmulator:
         pattern = (blob1 + blob2) * 155
         
         # Add background noise (simulating sensor shot noise)
-        noise = np.random.randint(50, 100, (512, 512), dtype=np.uint8)
+        noise = np.random.randint(50, 150, (512, 512), dtype=np.uint8)
         
         # Combine using addition and clip to avoid uint8 wrap-around
         frame = np.clip(pattern + noise, 0, 255).astype(np.uint8)

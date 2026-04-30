@@ -187,6 +187,8 @@ class SADEstimator(PhaseEstimator):
         
         offset, score = v_fitting(scores[best_idx - 1], scores[best_idx], scores[best_idx + 1])
         phase = ((best_idx + offset - NUM_EXTRA_REF_FRAMES) / self.reference_period) * TWO_PI
+
+        print(f"SAD Estimate: Best Index={best_idx}, Offset={offset:.2f}, Score={score:.2f}")
         
         return phase % TWO_PI, score
     
@@ -209,10 +211,7 @@ class MLEEstimator(PhaseEstimator):
         else:
             return "MLE_COLLECTING_FRAMES"
 
-    def build_model(self):
-        # Again, needs to be copied over from my main code.
-        # This will bin frames by phase and estimating pixel-wise mean and variance for each bin.
-        # The binned frames will be of shape (n_bins, height, width) and the noise estimate will be of shape (n_bins, height, width)       
+    def build_model(self):   
         n_bins = Config.Gating.MLE_BINS
         frames = np.stack([h[0] for h in self.frame_history])
         phases = np.array([h[1] for h in self.frame_history])
@@ -311,6 +310,8 @@ class PhaseManager:
                 
                 if source == "SAD" or log_all:
                     results["sad"] = {"phase": phase_sad, "score": score_sad}
+                    if source == "SAD":
+                        status = "READY"
                 
                 if mle_needs_bootstrap:
                     status = self.mle.add_sample(frame, phase=phase_sad)
