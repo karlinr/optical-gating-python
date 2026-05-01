@@ -1,3 +1,4 @@
+import pstats
 import sys
 from loguru import logger
 import numpy as np
@@ -8,6 +9,8 @@ from app.state import AppState, ExperimentState
 
 from logic.phase_estimator import PhaseManager
 from logic.phase_predictor import PhasePredictor
+
+import cProfile
 
 logger.remove()
 logger.add(sys.stderr, level="INFO", format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>")
@@ -105,4 +108,11 @@ def main():
         logger.info("All hardware components shut down gracefully.")
 
 if __name__ == "__main__":
+    profiler = cProfile.Profile()
+    profiler.enable()
+
     main()
+
+    profiler.disable()
+    stats = pstats.Stats(profiler).sort_stats('tottime')
+    stats.print_stats(20)

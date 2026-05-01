@@ -73,10 +73,10 @@ class CameraEmulator:
         
         # "Change it to a scale": Use the blobs to define the intensity scale
         # Base brightness of 100, scaled up to 255 by the blobs
-        pattern = (blob1 + blob2) * 155
+        pattern = (blob1 + blob2) * 255
         
         # Add background noise (simulating sensor shot noise)
-        noise = np.random.randint(50, 150, (512, 512), dtype=np.uint8)
+        noise = np.random.randint(50, 100, (512, 512), dtype=np.uint8)
         
         # Combine using addition and clip to avoid uint8 wrap-around
         frame = np.clip(pattern + noise, 0, 255).astype(np.uint8)

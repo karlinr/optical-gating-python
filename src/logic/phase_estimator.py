@@ -212,8 +212,6 @@ class MLEEstimator(PhaseEstimator):
             return "MLE_COLLECTING_FRAMES"
 
     def build_model(self):
-        # TODO: Check we are handling the loop around correctly.
-
         n_bins = Config.Gating.MLE_BINS
         frames = np.stack([h[0] for h in self.frame_history])
         phases = np.array([h[1] for h in self.frame_history])
@@ -222,7 +220,6 @@ class MLEEstimator(PhaseEstimator):
         bin_indices = np.digitize(phases, bins) - 1
         bin_indices[bin_indices == n_bins] = 0
 
-        # Print number of frames in each bin for debugging
         logger.info(f"Frame count per bin: \n{np.bincount(bin_indices, minlength=n_bins)}")
 
         frame_shape = frames[0].shape
@@ -232,16 +229,22 @@ class MLEEstimator(PhaseEstimator):
         for b in range(n_bins):
             mask = (bin_indices == b)
 
-            self.binned_frames[b] = np.mean(frames[mask], axis=0) if np.any(mask) else np.zeros(frame_shape, dtype=np.float32)
+            masked_frames = frames[mask]
+            masked_phases = phases[mask]
 
-            if len(frames[mask]) > 1:
-                order = np.argsort(phases[mask])
-                sorted_frames = frames[mask][order]
+            self.binned_frames[b] = np.mean(masked_frames, axis=0) if np.any(mask) else np.zeros(frame_shape, dtype=np.float32)
+
+            if len(masked_frames) > 1:
+                order = np.argsort(masked_phases)
+                sorted_frames = masked_frames[order]
                 diffs = np.diff(sorted_frames, axis=0)
-                self.noise_estimate[b] = np.sum(diffs ** 2, axis=0) / (len(frames[mask]) - 1)
+                self.noise_estimate[b] = np.sum(diffs ** 2, axis=0) / (2 * (len(masked_frames) - 1))
             else:
                 logger.warning(f"Bin {b} has only one frame. Setting noise estimate to default value.")
                 self.noise_estimate[b] = np.ones(frame_shape, dtype=np.float32) * Config.Gating.MLE_MIN_NOISE
+
+            # Set any zero noise estimates to a minimum value to avoid division issues
+            self.noise_estimate[b][self.noise_estimate[b] < Config.Gating.MLE_MIN_NOISE] = Config.Gating.MLE_MIN_NOISE
 
         logger.info("MLE Estimator model built. Ready for estimation.")
      

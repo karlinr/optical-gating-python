@@ -33,7 +33,7 @@ def chi_sq(test_frame, binned_frames, noise_est):
     # noise_est (n_bins, w, h) - 3D array
     n_bins, w, h = binned_frames.shape
 
-    chi_sq_terms = np.zeros(n_bins)
+    chi_sq_terms = np.zeros(n_bins, dtype=np.float64)
 
     for i in prange(n_bins):
         acc = 0.0
@@ -42,27 +42,28 @@ def chi_sq(test_frame, binned_frames, noise_est):
                 obs = test_frame[x, y]
                 exp = binned_frames[i, x, y]
                 var = noise_est[i, x, y]
-                if var > 0:
-                    acc += (obs - exp) ** 2 / var
+                acc += (obs - exp) ** 2 / var
         chi_sq_terms[i] = acc
 
     return chi_sq_terms
 
-@njit(parallel = True)
+@njit(parallel=True, fastmath=True)
 def sad_with_references(test_frame, reference_stack):
     """
     Compute Sum of Absolute Differences (SAD) between a test frame and multiple reference frames.
     This is written as a drop in replacement for Jonathan Taylor's original SAD implementation
     """
-    # Test frame (w,h) - 2D array
-    # Reference stack (n_refs, w, h) - 3D array
-
     n_refs, w, h = reference_stack.shape
 
-    sad_scores = np.zeros(n_refs)
+    sad_scores = np.zeros(n_refs, dtype=np.int64)
 
-    frame_flat = test_frame.ravel().astype(np.float32)
     for i in prange(n_refs):
-        ref_flat = reference_stack[i].ravel()
-        sad_scores[i] = np.sum(np.abs(frame_flat - ref_flat))
+        acc = np.int64(0)
+        for x in range(w):
+            for y in range(h):
+                obs = np.int32(test_frame[x, y])
+                ref = np.int32(reference_stack[i, x, y])
+                acc += abs(obs - ref)
+        sad_scores[i] = acc
+        
     return sad_scores
