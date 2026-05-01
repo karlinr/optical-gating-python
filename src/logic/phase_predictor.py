@@ -1,7 +1,18 @@
 import numpy as np
 from app.config import Config
+from abc import ABC, abstractmethod
 
-class PhasePredictor:
+class PhasePredictor(ABC):
+    """Base class for phase predictors."""
+    @abstractmethod
+    def update_phase(self, current_phase, timestamp):
+        pass
+
+    @abstractmethod
+    def predict_target_time(self, target_phase, **kwargs):
+        pass
+
+class BarrierPredictor(PhasePredictor):
     def __init__(self):
         self.timestamp_history = []
         self.phase_history = []

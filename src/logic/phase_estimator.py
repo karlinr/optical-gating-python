@@ -73,11 +73,14 @@ class SADEstimator(PhaseEstimator):
         self.reference_period = period
 
         target_frame, barrier_frame = self._pick_frames()
+
+        print(f"Target Frame: {target_frame:.2f}, Barrier Frame: {barrier_frame:.2f}")
         
-        self.barrier_phase = TWO_PI * (target_frame / self.reference_period)
+        self.target_phase = TWO_PI * (target_frame / self.reference_period)
+        self.barrier_phase = TWO_PI * (barrier_frame / self.reference_period)
         self._ready = True
         
-        logger.info(f"SAD Model Built: Period={period:.2f}, Barrier Phase={self.barrier_phase:.2f}")
+        logger.info(f"SAD Model Built: Period={period:.2f}, Target Phase={self.target_phase:.2f}, Barrier Phase={self.barrier_phase:.2f}")
         return True
 
     def _establish_indices(self):
@@ -308,7 +311,7 @@ class PhaseManager:
                 self.app_state.send_event("SAD_RESULTS", {"phase": phase_sad, "score": score_sad})
                 
                 if source == "SAD" or log_all:
-                    results["sad"] = {"phase": phase_sad, "score": score_sad}
+                    results["sad"] = {"phase": phase_sad, "score": score_sad, "target_phase": self.sad.target_phase, "barrier_phase": self.sad.barrier_phase}
                     if source == "SAD":
                         status = "READY"
                 

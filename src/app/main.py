@@ -8,7 +8,7 @@ from app.config import Config
 from app.state import AppState, ExperimentState
 
 from logic.phase_estimator import PhaseManager
-from logic.phase_predictor import PhasePredictor
+from logic.phase_predictor import BarrierPredictor
 
 import cProfile
 
@@ -37,7 +37,7 @@ def main():
         app_state.set_state(ExperimentState.READY)
 
         phase_manager = PhaseManager(app_state = app_state)
-        phase_predictor = PhasePredictor()
+        phase_predictor = BarrierPredictor()
 
         app_state.set_state(ExperimentState.RUNNING_EXPERIMENT)
 
@@ -59,7 +59,7 @@ def main():
             if results["status"] == "READY":
                 current_phase = results["sad"]["phase"]
                 phase_predictor.update_phase(current_phase, timestamp)
-                predicted_time = phase_predictor.predict_target_time(np.pi, 0)
+                predicted_time = phase_predictor.predict_target_time(results["sad"]["target_phase"], results["sad"]["barrier_phase"])
                 if predicted_time is not None:
                     predicted_time_history.append(predicted_time)
 
