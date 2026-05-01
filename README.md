@@ -12,10 +12,11 @@ src/
 ├── interfaces/
 │   ├── camera.py          # Ximea camera driver
 │   ├── timing_box.py      # Serial interface to the timing box
+│   ├── stage_controller.py# (Placeholder) Future stage controller logic
 │   └── system.py          # High-level system controller
 ├── logic/
 │   ├── phase_estimator.py # Phase estimation: SAD and MLE estimators
-│   ├── phase_predictor.py # (Placeholder) Future prediction logic
+│   ├── phase_predictor.py # Future prediction logic
 │   ├── drift_corrector.py # (Placeholder) Drift correction
 │   └── utils.py           # SAD, chi-squared, V-fitting
 └── hardware_emulators/
@@ -32,8 +33,8 @@ src/
 - Thread safe state manager for eventual future UI integration
 - Phase estimation using MLE method
 ## Partially implemented
+- Phase prediction. Barrier prediction is working. Kalman prediction to be added.
 ## Not implemented
-- Phase prediction
 - Fluorescence camera triggering
 - Drift correction
 - Stage controls
