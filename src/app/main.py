@@ -22,12 +22,20 @@ def main():
     app_state = AppState()
     controller = SystemController(app_state = app_state)
 
+    storage_path = Config.ExperimentConfig.EXPERIMENT_DATA_PATH    
+
     try:
-        controller.connect_all()
+        bf_test_frame, fl_test_frame = controller.connect_all()
         logger.info("All hardware components connected successfully.")
 
         app_state.set_state(ExperimentState.CALIBRATING)
-        controller.synchronise_camera()
+
+        brightfield_chunk_size = (32, 1, 1, bf_test_frame.shape[0], bf_test_frame.shape[1])
+        fl_chunk_size = (1, 1, 1, fl_test_frame.shape[0], fl_test_frame.shape[1])
+
+        logger.info(f"Brightfield camera frame shape: {bf_test_frame.shape}, chunk size: {brightfield_chunk_size}")
+        logger.info(f"Fluorescence camera frame shape: {fl_test_frame.shape}, chunk size: {fl_chunk_size}")
+
         logger.info("Camera synchronisation complete.")
 
         controller.setup_cameras_for_experiment()
@@ -108,11 +116,11 @@ def main():
         logger.info("All hardware components shut down gracefully.")
 
 if __name__ == "__main__":
-    profiler = cProfile.Profile()
-    profiler.enable()
+    """profiler = cProfile.Profile()
+    profiler.enable()"""
 
     main()
 
-    profiler.disable()
+    """profiler.disable()
     stats = pstats.Stats(profiler).sort_stats('tottime')
-    stats.print_stats(20)
+    stats.print_stats(20)"""

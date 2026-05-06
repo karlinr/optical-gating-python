@@ -191,6 +191,11 @@ class TimingBox:
         return int(seconds / TimingBox.TICK_SEC)
     
     @staticmethod
+    def seconds_to_24bit_ticks(seconds):
+        """Converts seconds to ticks and formats as 24-bit value."""
+        return TimingBox.to_24bit(TimingBox.seconds_to_ticks(seconds))
+    
+    @staticmethod
     def format_tick_time(ticks: int) -> str:
         """Formats a tick count into a human-readable string with seconds and ticks."""
         seconds = ticks * TimingBox.TICK_SEC

@@ -2,6 +2,11 @@ from enum import IntEnum
 from dataclasses import dataclass, field
 from typing import List, Tuple, Optional
 
+class ExperimentConfig:
+    DATA_ROOT = "data"
+    EXPERIMENT_NAME = "default_experiment"
+    EXPERIMENT_DATA_PATH = f"{DATA_ROOT}/{EXPERIMENT_NAME}"
+
 # Timing box and pin mapping
 class TimingBox:
     PORT = 'COM6'
@@ -102,6 +107,7 @@ class Gating:
 class Config:
     EMULATE_CAMERA = True  # Whether to use the camera emulator or real hardware
 
+    ExperimentConfig = ExperimentConfig
     TimingBox = TimingBox
     Cameras = Cameras
     Gating = Gating
