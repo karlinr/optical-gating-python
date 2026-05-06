@@ -3,9 +3,14 @@ from dataclasses import dataclass, field
 from typing import List, Tuple, Optional
 
 class ExperimentConfig:
+    # Paths for saving data and logs
     DATA_ROOT = "data"
     EXPERIMENT_NAME = "default_experiment"
     EXPERIMENT_DATA_PATH = f"{DATA_ROOT}/{EXPERIMENT_NAME}"
+
+    # Performance settings
+    BRIGHTFIELD_CHUNK_SIZE = 100
+    FLUORESCENCE_CHUNK_SIZE = 1
 
 # Timing box and pin mapping
 class TimingBox:

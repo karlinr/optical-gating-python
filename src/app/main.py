@@ -2,6 +2,8 @@ import pstats
 import sys
 from loguru import logger
 import numpy as np
+import zarr
+from ome_zarr.writer import write_image
 
 from interfaces.system import SystemController
 from app.config import Config
@@ -30,8 +32,8 @@ def main():
 
         app_state.set_state(ExperimentState.CALIBRATING)
 
-        brightfield_chunk_size = (32, 1, 1, bf_test_frame.shape[0], bf_test_frame.shape[1])
-        fl_chunk_size = (1, 1, 1, fl_test_frame.shape[0], fl_test_frame.shape[1])
+        brightfield_chunk_size = (Config.ExperimentConfig.BRIGHTFIELD_CHUNK_SIZE, 1, 1, bf_test_frame.shape[0], bf_test_frame.shape[1])
+        fl_chunk_size = (Config.ExperimentConfig.FLUORESCENCE_CHUNK_SIZE, 1, 1, fl_test_frame.shape[0], fl_test_frame.shape[1])
 
         logger.info(f"Brightfield camera frame shape: {bf_test_frame.shape}, chunk size: {brightfield_chunk_size}")
         logger.info(f"Fluorescence camera frame shape: {fl_test_frame.shape}, chunk size: {fl_chunk_size}")
