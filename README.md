@@ -32,10 +32,10 @@ src/
 - Phase estimation using SAD method
 - Thread safe state manager for eventual future UI integration
 - Phase estimation using MLE method
+- Fluorescence camera triggering
 ## Partially implemented
 - Phase prediction. Barrier prediction is working. Kalman prediction to be added.
 ## Not implemented
-- Fluorescence camera triggering
 - Drift correction
 - Stage controls
 - User interface
