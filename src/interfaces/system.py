@@ -23,8 +23,12 @@ class SystemController:
         Connects to the timing box and both cameras.
         """
         self.timing_box.connect()
-        self.bf_cam.connect(serial_number = Config.Cameras.BF.serial)
-        self.fl_cam.connect(serial_number = Config.Cameras.FL.serial)
+        self.bf_cam.connect(Config.Cameras.BF)
+        self.fl_cam.connect(Config.Cameras.FL)
+
+        # Setup camera settings
+        self.bf_cam.set_config(Config.Cameras.BF)
+        self.fl_cam.set_config(Config.Cameras.FL)
 
         # Set each camera to trigger a single frame to verify the connection and get initial frame dimensions
         self.bf_cam.set_mode_hardware_trigger(cam_trigger_pin = Config.Cameras.BF.trigger_pin)
@@ -64,9 +68,12 @@ class SystemController:
         Then in future if we want to trigger the fluorescence camera relative to the brightfield we can use the brightfield timestamp
         convert to timing box ticks and schedule a trigger at that time.
         """
-        pulse_ticks = TimingBox.seconds_to_24bit_ticks(0.1)  # 100 ms pulse duration in timing box ticks
-        wait_ticks = TimingBox.seconds_to_24bit_ticks(0.9)   # 900 ms wait duration in timing box ticks (total 1 second cycle)
-        total_time = pulse_ticks + wait_ticks
+        pulse_ticks = TimingBox.seconds_to_24bit_ticks(0.01)  # 100 ms pulse duration in timing box ticks
+        wait_ticks_between_triggers = TimingBox.seconds_to_24bit_ticks(0.99)   # 900 ms wait duration in timing box ticks (total 1 second cycle)
+        wait_time_to_trigger = TimingBox.seconds_to_24bit_ticks(0.5)  # Time to wait before firing the sequence, to give us time to prepare
+        
+        sequence_gap_ticks = pulse_ticks + wait_ticks_between_triggers
+        total_wait_time = wait_time_to_trigger + sequence_gap_ticks + pulse_ticks
 
         self.bf_cam.set_mode_hardware_trigger(cam_trigger_pin = Config.Cameras.BF.trigger_pin)
 
@@ -78,18 +85,19 @@ class SystemController:
         # First setup our pianola memory to trigger the camera immediately and then 1 second later
         self.timing_box.add_step([Config.TimingBox.Logical.BF], duration_ticks=pulse_ticks)  # Trigger brightfield camera
         # Turn off trigger
-        self.timing_box.add_step([], duration_ticks=wait_ticks)  # Wait for 0.9 seconds (total 1 second from first trigger)
+        self.timing_box.add_step([], duration_ticks=wait_ticks_between_triggers)  # Wait for 0.9 seconds (total 1 second from first trigger)
         self.timing_box.add_step([Config.TimingBox.Logical.BF], duration_ticks=pulse_ticks)  # Trigger brightfield camera again
-        self.timing_box.add_step([], duration_ticks=wait_ticks)  # Wait for 0.9 seconds (total 1 second from first trigger)
+        self.timing_box.add_step([], duration_ticks=wait_ticks_between_triggers)  # Wait for 0.9 seconds (total 1 second from first trigger)
         self.timing_box.finalize_sequence(repeat = False)
 
         # Now we run the sequence at a specific time so we know the exact timing box ticks for each trigger
         current_time = self.timing_box.get_current_time()
-        fire_time, success = self.timing_box.fire_at(current_time + TimingBox.to_24bit(0.1 / self.timing_box.TICK_SEC))  # Fire sequence after 100 ms to give us time to prepare
+        fire_at = (current_time + wait_time_to_trigger) & 0xFFFFFF  # Schedule for the future, ensuring we wrap around correctly within the 24-bit range
+        fire_time, success = self.timing_box.fire_at(fire_at)  # Fire sequence after 100 ms to give us time to prepare
         # Now poll the brightfield camera for the two frames and record their timestamps and the corresponding timing box ticks
         bf_timestamps = []
 
-        while TimingBox.is_future_tick(fire_time + total_time, self.timing_box.get_current_time()):
+        while TimingBox.is_future_tick((fire_time + total_wait_time) & 0xFFFFFF, self.timing_box.get_current_time()):
             time.sleep(0.1) # Small sleep to reduce CPU load
 
         while len(bf_timestamps) < 2:
@@ -97,9 +105,11 @@ class SystemController:
             if timestamp is not None:
                 bf_timestamps.append(timestamp)
 
-        t1_box = fire_time
+        logger.info(f"Brightfield timestamps recorded: {bf_timestamps}")
+
+        t1_box = fire_at
         t1_bf = bf_timestamps[0]
-        t2_box = fire_time + total_time # 1 second later in timing box ticks
+        t2_box = (fire_at + sequence_gap_ticks) & 0xFFFFFF  # 1 second later in timing box ticks
         t2_bf = bf_timestamps[1]
 
         tick_delta = TimingBox.get_tick_diff(t2_box, t1_box)
@@ -109,6 +119,8 @@ class SystemController:
         # We have two points: (t1_box, t1_bf) and (t2_box, t2_bf)
         self.timestamp_to_ticks_gradient = tick_delta / time_delta
         self.timestamp_to_ticks_intercept = t1_box - self.timestamp_to_ticks_gradient * t1_bf
+
+        logger.info(f"Camera synchronisation complete. Timestamp to ticks conversion: ticks = {self.timestamp_to_ticks_gradient} * timestamp + {self.timestamp_to_ticks_intercept}")
 
     def setup_cameras_for_experiment(self):
         """
@@ -132,8 +144,8 @@ class SystemController:
 
         # Upload the pianola sequence that will be used to trigger the fluorescence camera during the experiment
         # We should only have to do this once since we can use fire_at() to schedule it at the correct times during the experiment
-        self.timing_box.add_step([Config.TimingBox.Logical.FL_1], duration_ticks=TimingBox.seconds_to_24bit_ticks(0.1))  # Trigger fluorescence camera
-        self.timing_box.add_step([], duration_ticks=TimingBox.seconds_to_24bit_ticks(0.9))  # Wait for 0.9 seconds (total 1 second from first trigger)
+        self.timing_box.add_step([Config.TimingBox.Logical.FL_1, Config.TimingBox.Logical.LAS_BLUE], duration_ticks=TimingBox.seconds_to_24bit_ticks(0.1))  # Trigger fluorescence camera
+        self.timing_box.add_step([], duration_ticks=TimingBox.seconds_to_24bit_ticks(0.05))
         self.timing_box.finalize_sequence(repeat = False)
 
     def _apply_camera_pin_mappings(self, cam_config):
@@ -151,16 +163,25 @@ class SystemController:
         self.app_state.send_event("NEW_BF_FRAME", timestamp)
         self.app_state.update_frame(frame)
         return frame, timestamp
+    
+    def get_latest_fl_frame(self):
+        """
+        Retrieves the latest frame and timestamp from the fluorescence camera.
+        """
+        try:
+            frame, timestamp = self.fl_cam.get_latest_frame()
+            self.app_state.send_event("NEW_FL_FRAME", timestamp)
+            return frame, timestamp
+        except Exception as e:
+            logger.error(f"Error getting frame from fluorescence camera: {e}")
+            raise
 
     def trigger_fl_frame(self, timestamp: float):
         """Schedules a fluorescence trigger with safety checks for wrap-around."""
         target_tick = self.timestamp_to_ticks(timestamp)
-        current_tick = self.timing_box.get_current_time()
-        
-        if not TimingBox.is_future_tick(target_tick, current_tick):
-            logger.warning("Target trigger time has already passed in the 24-bit cycle.")
-            return False, None
-            
+
+        logger.info(f"Scheduling fluorescence trigger at timestamp {timestamp} (Timing Box tick: {target_tick})")
+
         return self.timing_box.fire_at(target_tick)
 
     def timestamp_to_ticks(self, timestamp):

@@ -138,6 +138,8 @@ class TimingBox:
         self._send_command("FIRE_AT", data)
         # Returns 1-byte flag and 3-byte clock
         response = self.ser.read(4)
+
+        logger.info(f"FIRE_AT response: {response[0]} (Clock: {int.from_bytes(response[1:4], 'big')})")
         return int.from_bytes(response[1:4], 'big'), response[0]
 
     def get_current_time(self):

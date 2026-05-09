@@ -1,5 +1,6 @@
 from loguru import logger
 import ximea.xiapi as xiapi
+import time
 
 class XimeaCamera:
     """
@@ -10,14 +11,41 @@ class XimeaCamera:
         self.cam = xiapi.Camera()
         self.img_buffer = xiapi.Image()
 
-    def connect(self, serial_number):
-        self.serial_number = serial_number
+        self.last_timestamp = None
+
+    def connect(self, config):
+        self.serial_number = config.serial
         try:
             self.cam.open_device_by_SN(self.serial_number)
+            self.cam.set_debug_level(self.cam.get_debug_level_maximum())
+            self.set_config(config)
             logger.info(f"Camera with SN {self.serial_number} opened successfully.")
         except xiapi.Xi_error as e:
             logger.error(f"Failed to open camera with SN {self.serial_number}: {e}")
             raise
+
+    def set_config(self, config):
+        logger.info(f"Setting camera ROI and dimensions for camera SN {self.serial_number}. ROI: {config.roi}, Downsample: {config.downsample}")
+        if config.roi is not None:
+            logger.info(f"Applying ROI settings for camera SN {self.serial_number}.")
+            self.cam.set_width(config.roi[2])
+            self.cam.set_height(config.roi[3])
+            self.cam.set_offsetX(config.roi[0])
+            self.cam.set_offsetY(config.roi[1])
+        else:
+            self.cam.set_width(self.cam.get_width_maximum())
+            self.cam.set_height(self.cam.get_height_maximum())
+            self.cam.set_offsetX(0)
+            self.cam.set_offsetY(0)
+
+        if config.sensor_taps is not None:
+            logger.info(f"Setting sensor taps for camera SN {self.serial_number} to {config.sensor_taps}.")
+            self.cam.set_sensor_taps(config.sensor_taps)
+
+        logger.info(f"Setting camera SN {self.serial_number} exposure to {config.exposure_us} microseconds.")
+        self.cam.set_exposure(config.exposure_us)
+
+        time.sleep(0.1)  # Small delay to ensure settings are applied before starting acquisition
 
     def get_latest_frame(self, timeout_ms=1000):
         try:
@@ -25,6 +53,10 @@ class XimeaCamera:
 
             timestamp = self.img_buffer.tsSec + self.img_buffer.tsUSec / 1e6
             frame_data = self.img_buffer.get_image_data_numpy()
+
+            if self.last_timestamp is not None:
+                logger.info(f"Framerate: {1/(timestamp - self.last_timestamp)} FPS")
+            self.last_timestamp = timestamp
 
             return frame_data, timestamp
         except xiapi.Xi_error as e:

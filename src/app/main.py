@@ -4,6 +4,7 @@ from loguru import logger
 import numpy as np
 import zarr
 from ome_zarr.writer import write_image
+import tifffile as tf
 
 from interfaces.system import SystemController
 from app.config import Config
@@ -13,6 +14,8 @@ from logic.phase_estimator import PhaseManager
 from logic.phase_predictor import BarrierPredictor
 
 import cProfile
+import matplotlib.pyplot as plt
+
 
 logger.remove()
 logger.add(sys.stderr, level="INFO", format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>")
@@ -24,7 +27,9 @@ def main():
     app_state = AppState()
     controller = SystemController(app_state = app_state)
 
-    storage_path = Config.ExperimentConfig.EXPERIMENT_DATA_PATH    
+    storage_path = Config.ExperimentConfig.EXPERIMENT_DATA_PATH 
+
+    firing = False   
 
     try:
         bf_test_frame, fl_test_frame = controller.connect_all()
@@ -40,6 +45,7 @@ def main():
 
         logger.info("Camera synchronisation complete.")
 
+        controller.synchronise_camera()
         controller.setup_cameras_for_experiment()
         controller.setup_timing_box_for_experiment()
         logger.info("Hardware setup for experiment complete. Ready to run.")
@@ -73,16 +79,30 @@ def main():
                 if predicted_time is not None:
                     predicted_time_history.append(predicted_time)
 
-            # Decide whether to fire
-            # Not implemented yet
+                    # Decide whether to fire the sequence based on predicted time and current time
+                    time_to_fire = predicted_time - timestamp
 
-            # If firing, send command to timing box
-            # Not implemented yet
+                    if predicted_time is not None and timestamp is not None and 0 <= time_to_fire < 0.05 and not firing:
+                        logger.info(f"Predicted time {predicted_time} is within 50ms. Firing.")
+                        response = controller.trigger_fl_frame(predicted_time)
+                        if response[-1] == 1:
+                            logger.info(f"Successfully scheduled fluorescence trigger at predicted time {predicted_time}. Timing box response: {response}")
+                            firing = True
+                            fire_timestamp = predicted_time
 
-            # If fired, get the latest frame from the fluorescence camera
-            # Not implemented yet
+                # If fired, get the latest frame from the fluorescence camera
+                if firing:
+                    # Check if time is passed
+                    if timestamp > fire_timestamp + 0.1:  # Wait for 100 ms after predicted time to give the camera time to capture and transfer the frame
+                        try:
+                            fl_frame, fl_timestamp = controller.get_latest_fl_frame()
+                            tf.imwrite(f"{storage_path}/fl_frame_{fl_timestamp}.tif", fl_frame)
+                            firing = False
+                            logger.info(f"Fluorescence frame captured at timestamp {fl_timestamp}")
+                        except Exception as e:
+                            firing = False
+                            logger.error(f"Failed to capture fluorescence frame: {e}")
 
-        import matplotlib.pyplot as plt
         plt.figure(figsize=(12, 6))
         plt.subplot(2, 1, 1)
         plt.plot(timestamp_history, sad_phase_history, label="Estimated Phase (SAD)")

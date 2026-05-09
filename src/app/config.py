@@ -1,6 +1,7 @@
 from enum import IntEnum
 from dataclasses import dataclass, field
 from typing import List, Tuple, Optional
+from ximea import xiapi
 
 class ExperimentConfig:
     # Paths for saving data and logs
@@ -14,7 +15,7 @@ class ExperimentConfig:
 
 # Timing box and pin mapping
 class TimingBox:
-    PORT = 'COM6'
+    PORT = 'COM3'
     EMULATOR_PORT = 'COM5'
     TEST_PORT = 'COM6'
     
@@ -46,7 +47,8 @@ class CameraConfig:
     downsample: int
     roi: Optional[Tuple[int, int, int, int]]
     trigger_pin: int  # GPIO pin on the camera
-    framerate: Optional[int] = None
+    framerate: Optional[int] = None,
+    sensor_taps: int = None
     label: str = ""
     box_pins: List[int] = field(default_factory=list)
 
@@ -55,15 +57,16 @@ class Cameras:
     BF = CameraConfig(
         label="Brightfield camera",
         serial="28600723",
-        exposure_us=1000,
+        exposure_us=300,
         gain=0.0,
         downsample=1,
-        roi=(856, 572, 484, 488),
+        roi=(828, 418, 484, 488),
         trigger_pin=2, # Physical GPIO pin on the camera
         box_pins=[
             TimingBox.Logical.BF
             ],
-        framerate=80
+        framerate=80,
+        sensor_taps = "XI_TAP_CNT_2"
     )
 
     # Fluorescence
@@ -79,7 +82,9 @@ class Cameras:
                 TimingBox.Logical.FL_1, 
                 TimingBox.Logical.LAS_BLUE, 
                 TimingBox.Logical.LAS_GREEN
-            ]
+            ],
+            framerate=None,
+            sensor_taps = None
         )
 
 class Gating:
@@ -110,7 +115,7 @@ class Gating:
     MIN_HISTORY_FOR_PREDICTION = 50
 
 class Config:
-    EMULATE_CAMERA = True  # Whether to use the camera emulator or real hardware
+    EMULATE_CAMERA = False  # Whether to use the camera emulator or real hardware
 
     ExperimentConfig = ExperimentConfig
     TimingBox = TimingBox
