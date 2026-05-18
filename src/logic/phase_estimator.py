@@ -84,6 +84,9 @@ class SADEstimator(PhaseEstimator):
 
     def _establish_indices(self):
         """Establish list indices representing a reference period."""
+        if len(self.frame_history) < 2:
+            return None, None, None
+
         frame = self.frame_history[-1][0]
         past_frames = np.array([f[0] for f in self.frame_history[:-1]])
 
@@ -97,11 +100,14 @@ class SADEstimator(PhaseEstimator):
             self.period_history.append(period)
 
         # Stability check: Requires 5 + 2*padding frames of history
-        history_stable = (len(self.period_history) >= (5 + (2 * NUM_EXTRA_REF_FRAMES))
-                          and period > 6)
+        history_stable = len(self.period_history) >= (5 + (2 * NUM_EXTRA_REF_FRAMES))
 
-        if period != -1 and history_stable:
+        if period != -1 and period > 6 and history_stable:
             period_to_use = self.period_history[-1 - NUM_EXTRA_REF_FRAMES]
+            
+            if (len(self.period_history) - 1 - NUM_EXTRA_REF_FRAMES) <= 0 or period_to_use <= 6:
+                return None, None, None
+                
             num_refs = int(period_to_use + 1) + (2 * NUM_EXTRA_REF_FRAMES)
             
             start = len(past_frames) - num_refs
@@ -113,7 +119,7 @@ class SADEstimator(PhaseEstimator):
 
     def _calculate_period_length(self, diffs):
         """Interpolated period search based on threshold factors."""
-        if diffs.size < 1:
+        if diffs.size < 2:
             return -1
 
         min_score = max_score = diffs[-1]
@@ -140,7 +146,7 @@ class SADEstimator(PhaseEstimator):
                 min_since_max = score
                 delta_for_min_since_max = d
                 stage = 1
-            elif score < min_score:
+            elif score != 0 and (min_score == 0 or score < min_score):
                 min_score = score
 
             if score < min_since_max:
@@ -149,9 +155,12 @@ class SADEstimator(PhaseEstimator):
 
         if got:
             best_match_idx = diffs.size - delta_for_min_since_max
-            # Sub-frame correction using v-fitting
-            offset, _ = v_fitting(diffs[best_match_idx-1], diffs[best_match_idx], diffs[best_match_idx+1])
-            return delta_for_min_since_max - offset
+            
+            if 0 < best_match_idx < diffs.size - 1:
+                offset, _ = v_fitting(diffs[best_match_idx-1], diffs[best_match_idx], diffs[best_match_idx+1])
+                return delta_for_min_since_max - offset
+            
+            return float(delta_for_min_since_max)
             
         return -1
 
@@ -203,7 +212,7 @@ class SADEstimator(PhaseEstimator):
         logger.info(f"SAD Estimate: Best Index={best_idx}, Offset={offset:.2f}, Score={score:.2f}")
         
         return {
-            "phase": phase,
+            "phase": phase % TWO_PI,
             "mean_absolute_error": score,
             "target_phase": self.target_phase,
             "barrier_phase": self.barrier_phase

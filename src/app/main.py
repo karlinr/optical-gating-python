@@ -61,6 +61,7 @@ def main():
         mle_phase_history = []
         timestamp_history = []
         predicted_time_history = []
+        trigger_time_history = []
         for i in range(5000):
             frame, timestamp = controller.get_latest_bf_frame()
 
@@ -89,6 +90,7 @@ def main():
                             logger.info(f"Successfully scheduled fluorescence trigger at predicted time {predicted_time}. Timing box response: {response}")
                             firing = True
                             fire_timestamp = predicted_time
+                            trigger_time_history.append((timestamp, predicted_time))
 
             # If fired, get the latest frame from the fluorescence camera
             if firing:
@@ -107,12 +109,16 @@ def main():
         plt.subplot(2, 1, 1)
         plt.plot(timestamp_history, sad_phase_history, label="Estimated Phase (SAD)")
         plt.plot(timestamp_history, mle_phase_history, label="Estimated Phase (MLE)")
+        for i in range(len(trigger_time_history)):
+            plt.axvline(x=trigger_time_history[i][0], color='r', linestyle='--', alpha=0.5, label="Fluorescence Trigger" if i == 0 else "")
         plt.xlabel("Time (s)")
         plt.ylabel("Phase (radians)")
         plt.title("Phase Estimation Over Time")
         plt.legend()
         plt.subplot(2, 1, 2)
         plt.plot(timestamp_history[:len(predicted_time_history)], predicted_time_history, label="Predicted Time for Target Phase")
+        for i in range(len(trigger_time_history)):
+            plt.axvline(x=trigger_time_history[i][0], color='r', linestyle='--', alpha=0.5, label="Fluorescence Trigger" if i == 0 else "")
         plt.xlabel("Time (s)")
         plt.ylabel("Predicted Time (s)")
         plt.title("Phase Prediction Over Time")

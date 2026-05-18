@@ -68,6 +68,9 @@ class CameraEmulator:
             if states.get(str(self.trigger_pin), 0) == 1:
                 self._trigger_event.set()
 
+    def set_config(self, config):
+        pass
+
     def connect(self, serial_number):
         self.serial_number = serial_number
         with CameraEmulator._lock:
