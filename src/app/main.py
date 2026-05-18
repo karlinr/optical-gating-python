@@ -66,16 +66,16 @@ def main():
 
             # Get phase estimate
             results = phase_manager.update(frame, timestamp = timestamp)
-            sad_phase_history.append(results.get("sad", {}).get("phase", None))
-            mle_phase_history.append(results.get("mle", {}).get("phase", None))
+            sad_phase_history.append(results.get("SAD", {}).get("phase", None))
+            mle_phase_history.append(results.get("MLE", {}).get("phase", None))
             timestamp_history.append(timestamp)
             logger.info(f"Status: {results["status"]}")
 
             # Do prediction
             if results["status"] == "READY":
-                current_phase = results["sad"]["phase"]
+                current_phase = results[Config.Gating.PHASE_SOURCE]["phase"]
                 phase_predictor.update_phase(current_phase, timestamp)
-                predicted_time = phase_predictor.predict_target_time(results["sad"]["target_phase"], results["sad"]["barrier_phase"])
+                predicted_time = phase_predictor.predict_target_time(results["gating"]["target_phase"], results["gating"]["barrier_phase"])
                 if predicted_time is not None:
                     predicted_time_history.append(predicted_time)
 
@@ -84,24 +84,24 @@ def main():
 
                     if predicted_time is not None and timestamp is not None and 0 <= time_to_fire < 0.05 and not firing:
                         logger.info(f"Predicted time {predicted_time} is within 50ms. Firing.")
-                        response = controller.trigger_fl_frame(predicted_time)
-                        if response[-1] == 1:
+                        box_time, response = controller.trigger_fl_frame(predicted_time)
+                        if response == 1:
                             logger.info(f"Successfully scheduled fluorescence trigger at predicted time {predicted_time}. Timing box response: {response}")
                             firing = True
                             fire_timestamp = predicted_time
 
-                # If fired, get the latest frame from the fluorescence camera
-                if firing:
-                    # Check if time is passed
-                    if timestamp > fire_timestamp + 0.1:  # Wait for 100 ms after predicted time to give the camera time to capture and transfer the frame
-                        try:
-                            fl_frame, fl_timestamp = controller.get_latest_fl_frame()
-                            tf.imwrite(f"{storage_path}/fl_frame_{fl_timestamp}.tif", fl_frame)
-                            firing = False
-                            logger.info(f"Fluorescence frame captured at timestamp {fl_timestamp}")
-                        except Exception as e:
-                            firing = False
-                            logger.error(f"Failed to capture fluorescence frame: {e}")
+            # If fired, get the latest frame from the fluorescence camera
+            if firing:
+                # Check if time is passed
+                if timestamp > fire_timestamp + 0.1:  # Wait for 100 ms after predicted time to give the camera time to capture and transfer the frame
+                    try:
+                        fl_frame, fl_timestamp = controller.get_latest_fl_frame()
+                        tf.imwrite(f"{storage_path}/fl_frame_{fl_timestamp}.tif", fl_frame)
+                        firing = False
+                        logger.info(f"Fluorescence frame captured at timestamp {fl_timestamp}")
+                    except Exception as e:
+                        firing = False
+                        logger.error(f"Failed to capture fluorescence frame: {e}")
 
         plt.figure(figsize=(12, 6))
         plt.subplot(2, 1, 1)

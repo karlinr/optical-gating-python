@@ -133,14 +133,21 @@ class TimingBox:
 
     def fire_at(self, tick_timestamp):
         """Schedules the sequence to run at a specific absolute tick count."""
+
+        # NOTE: I need to check what the return is. Is it returning the scheduled time or the current time?
+
         # Uses 3-byte time
         data = list(int(tick_timestamp & 0xFFFFFF).to_bytes(3, 'big'))
         self._send_command("FIRE_AT", data)
         # Returns 1-byte flag and 3-byte clock
         response = self.ser.read(4)
 
-        logger.info(f"FIRE_AT response: {response[0]} (Clock: {int.from_bytes(response[1:4], 'big')})")
-        return int.from_bytes(response[1:4], 'big'), response[0]
+        if len(response) == 4:
+            logger.info(f"FIRE_AT response: {response[0]} (Clock: {int.from_bytes(response[1:4], 'big')})")
+            return int.from_bytes(response[1:4], 'big'), response[0]
+        else:
+            logger.error("Failed to receive FIRE_AT response")
+            return None, None
 
     def get_current_time(self):
         """Retrieves the current hardware clock in ticks."""

@@ -47,7 +47,7 @@ class CameraConfig:
     downsample: int
     roi: Optional[Tuple[int, int, int, int]]
     trigger_pin: int  # GPIO pin on the camera
-    framerate: Optional[int] = None,
+    framerate: Optional[int] = None
     sensor_taps: int = None
     label: str = ""
     box_pins: List[int] = field(default_factory=list)
@@ -95,7 +95,7 @@ class Gating:
     PREDICTION_METHOD = "BARRIER"
 
     # Whether we should log all phase estimates or just the PHASE_SOURCE one
-    LOG_ALL = True
+    ENABLED_ESTIMATORS = ["SAD", "MLE"]
 
     # SAD parameters
     MIN_PERIOD = 5

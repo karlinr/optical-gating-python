@@ -18,11 +18,8 @@ class PhaseEstimator(ABC):
         return self._ready
 
     @abstractmethod
-    def add_sample(self, frame, **kwargs):
-        pass
-
-    @abstractmethod
-    def build_model(self):
+    def update(self, frame, **kwargs):
+        """Processes a frame. Returns an estimation dict if ready, or None if initializing."""
         pass
 
 class SADEstimator(PhaseEstimator):
@@ -39,27 +36,29 @@ class SADEstimator(PhaseEstimator):
         self.frame_history = []
         self.period_history = []
 
-    def add_sample(self, frame, **kwargs):
+    def update(self, frame, **kwargs):
         """Adds a frame and manages the history buffer based on heart rate."""
-        timestamp = kwargs.get("timestamp")
-        if timestamp is None:
-            logger.error("SADEstimator requires a timestamp in add_sample.")
-            return "SAD_ERROR"
-
-        self.frame_history.append((frame, timestamp))
-
-        ref_buffer_duration = self.frame_history[-1][1] - self.frame_history[0][1]
-        max_duration = 1.0 / Config.Gating.MIN_HEART_RATE_HZ
-        
-        while ref_buffer_duration > max_duration:
-            self.frame_history.pop(0)
-            ref_buffer_duration = self.frame_history[-1][1] - self.frame_history[0][1]
-
-        if len(self.frame_history) > Config.Gating.MIN_PERIOD:
-            if self.build_model():
-                return "SAD_MODEL_READY"
+        if not self.is_ready():
+            timestamp = kwargs.get("timestamp")
+            if timestamp is None:
+                logger.error("SADEstimator requires a timestamp in update.")
+                return None
             
-        return "SAD_COLLECTING_FRAMES"
+            self.frame_history.append((frame, timestamp))
+            ref_buffer_duration = self.frame_history[-1][1] - self.frame_history[0][1]
+            max_duration = 1.0 / Config.Gating.MIN_HEART_RATE_HZ
+
+            while ref_buffer_duration > max_duration:
+                self.frame_history.pop(0)
+                ref_buffer_duration = self.frame_history[-1][1] - self.frame_history[0][1]
+
+            if len(self.frame_history) > Config.Gating.MIN_PERIOD:
+                self.build_model()
+
+        if self.is_ready():
+            return self.estimate(frame)
+
+        return None
 
     def build_model(self):
         """Logic to establish period, extract sequence, and set barrier phase."""
@@ -193,7 +192,12 @@ class SADEstimator(PhaseEstimator):
 
         logger.info(f"SAD Estimate: Best Index={best_idx}, Offset={offset:.2f}, Score={score:.2f}")
         
-        return phase % TWO_PI, score
+        return {
+            "phase": phase,
+            "mean_absolute_error": score,
+            "target_phase": self.target_phase,
+            "barrier_phase": self.barrier_phase
+            }
     
 class MLEEstimator(PhaseEstimator):
     def __init__(self):
@@ -202,17 +206,20 @@ class MLEEstimator(PhaseEstimator):
         self.noise_estimate = None
         self.frame_history = []
 
-    def add_sample(self, frame, **kwargs):
-        phase = kwargs.get('phase')
-        if phase is not None:
-            self.frame_history.append((frame, phase))
+    def update(self, frame, **kwargs):
+        if not self.is_ready():
+            phase = kwargs.get("phase")
+            if phase is not None:
+                self.frame_history.append((frame, phase))
 
-        if len(self.frame_history) >= Config.Gating.MLE_BOOTSTRAP_FRAMES and not self._ready:
-            logger.info("MLE Estimator has enough samples. Building model.")
-            self.build_model()
-            return "MLE_MODEL_BUILT"
-        else:
-            return "MLE_COLLECTING_FRAMES"
+                if len(self.frame_history) >= Config.Gating.MLE_BOOTSTRAP_FRAMES:
+                    logger.info("Sufficient samples for MLE. Building model.")
+                    self.build_model()
+
+        if self.is_ready():
+            return self.estimate(frame)
+        
+        return None
 
     def build_model(self):
         n_bins = Config.Gating.MLE_BINS
@@ -259,7 +266,7 @@ class MLEEstimator(PhaseEstimator):
         scores = chi_sq(frame, self.binned_frames, self.noise_estimate)
         n_bins = len(scores)
         best_idx = np.argmin(scores)
-        score = scores[best_idx]  # Define the minimum score
+        score = scores[best_idx] / frame.size
 
         fit_points = Config.Gating.MLE_FIT_POINTS
         
@@ -281,50 +288,63 @@ class MLEEstimator(PhaseEstimator):
 
         phase_radians = ((best_idx + vertex_offset) % n_bins / n_bins) * TWO_PI
         
-        return phase_radians, score
+        return {
+            "phase": phase_radians,
+            "target_phase": None,
+            "reduced_chi_squared": score,
+            "uncertainty": 1 / (2 * a) if a != 0 else np.inf
+        }
     
 class PhaseManager:
     def __init__(self, app_state):
         self.app_state = app_state
-        self.sad = SADEstimator()
-        self.mle = MLEEstimator()
+
+        self.estimators = {
+            "SAD": SADEstimator(),
+            "MLE": MLEEstimator()
+        }
 
     def update(self, frame, timestamp):
         source = Config.Gating.PHASE_SOURCE
-        log_all = Config.Gating.LOG_ALL
-        
-        mle_required = (source == "MLE" or log_all)
-        results = {}
-        status = "UNKNOWN"
+        enabled_estimators = Config.Gating.ENABLED_ESTIMATORS
+        active_estimators = {name for name in enabled_estimators}
+        active_estimators.add(source)
 
-        if not self.sad.is_ready():
-            status = self.sad.add_sample(frame, timestamp=timestamp)
-        
-        if self.sad.is_ready():
-            mle_needs_bootstrap = (mle_required and not self.mle.is_ready())
+        if "MLE" in active_estimators and not self.estimators["MLE"].is_ready():
+            active_estimators.add("SAD")
 
-            sad_calculation_needed = (source == "SAD" or log_all or mle_needs_bootstrap)
-            
-            if sad_calculation_needed:
-                phase_sad, score_sad = self.sad.estimate(frame)
+        results = {"status": "UNKNOWN"}
+        sad_phase = None
 
-                self.app_state.send_event("SAD_RESULTS", {"phase": phase_sad, "score": score_sad})
-                
-                if source == "SAD" or log_all:
-                    results["sad"] = {"phase": phase_sad, "score": score_sad, "target_phase": self.sad.target_phase, "barrier_phase": self.sad.barrier_phase}
-                    if source == "SAD":
-                        status = "READY"
-                
-                if mle_needs_bootstrap:
-                    status = self.mle.add_sample(frame, phase=phase_sad)
+        # SAD method
+        if "SAD" in active_estimators:
+            sad_results = self.estimators["SAD"].update(frame, timestamp=timestamp)
 
-        if self.mle.is_ready() and mle_required:
-            phase_mle, score_mle = self.mle.estimate(frame)
-            self.app_state.send_event("MLE_RESULTS", {"phase": phase_mle, "score": score_mle})
-            results["mle"] = {"phase": phase_mle, "score": score_mle}
-            status = "READY"
+            if sad_results is not None:
+                results["SAD"] = sad_results
+                sad_phase = sad_results["phase"]
 
-        results["status"] = status
+        # MLE method
+        if "MLE" in active_estimators and sad_phase is not None:
+            mle_results = self.estimators["MLE"].update(frame, phase=sad_phase)
 
-        self.app_state.send_event("ESTIMATOR_STATUS", {"status": status})
+            if mle_results is not None:
+                results["MLE"] = mle_results
+
+        if self.estimators["SAD"].is_ready():
+            results["gating"] = {
+                "target_phase": self.estimators["SAD"].target_phase,
+                "barrier_phase": self.estimators["SAD"].barrier_phase
+            }
+
+        primary_estimator = self.estimators.get(source)
+        if primary_estimator and primary_estimator.is_ready():
+            results["status"] = "READY"
+        else:
+            if source == "SAD":
+                results["status"] = "SAD_COLLECTING_FRAMES"
+            elif source == "MLE":
+                results["status"] = "MLE_COLLECTING_FRAMES"
+
+        self.app_state.send_event("ESTIMATOR_STATUS", {"status": results["status"]})
         return results
