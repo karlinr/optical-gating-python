@@ -157,28 +157,38 @@ class SADEstimator(PhaseEstimator):
 
     def _pick_frames(self):
         """Automatically identify target and barrier frames."""
-        # Calculate deltas between consecutive frames in the sequence
-        inner_range = len(self.reference_frames) - 2 * NUM_EXTRA_REF_FRAMES
-        deltas = np.zeros(inner_range)
-        
-        for i in range(inner_range):
-            f1 = self.reference_frames[i + NUM_EXTRA_REF_FRAMES]
-            f2 = self.reference_frames[i + NUM_EXTRA_REF_FRAMES + 1]
-            deltas[i] = np.sum(np.abs(f1.astype(np.int32) - f2.astype(np.int32)))
+        total_frames = len(self.reference_frames)
+        stop_index = total_frames - NUM_EXTRA_REF_FRAMES
 
+        # Calculate deltas between consecutive frames in the sequence
+        f1s = self.reference_frames[NUM_EXTRA_REF_FRAMES : stop_index]
+        f2s = self.reference_frames[NUM_EXTRA_REF_FRAMES + 1 : stop_index + 1]
+        deltas = np.sum(np.abs(f1s.astype(np.int32) - f2s.astype(np.int32)), axis=(1, 2))
+
+        # Find the frame with the maximum delta (largest change)
         max_pos = np.argmax(deltas)
-        
-        # Max change sub-frame estimate
-        offset, _ = v_fitting(-deltas[max_pos-1], -deltas[max_pos], -deltas[max_pos+1])
+
+        if max_pos <= 0 or max_pos >= deltas.size - 1:
+            offset = 0
+            max_pos = 0
+        else:
+            offset, _ = v_fitting(-deltas[max_pos-1], -deltas[max_pos], -deltas[max_pos+1])
+
+        # Target: Shift the phase forward by 1/3 of a period from the max delta peak, wrapped within the cycle
         target_frame = (max_pos + offset + (self.reference_period / 3.0)) % self.reference_period
         
         # Barrier: first point rising past midpoint between min and max deltas
         min_delta, max_delta = np.min(deltas), np.max(deltas)
         midpoint = (min_delta + max_delta) / 2
-        barrier_frame = np.argmin(deltas)
+
+        start_barrier = np.argmin(deltas)
+        barrier_frame = start_barrier
         
         while deltas[barrier_frame] < midpoint:
             barrier_frame = (barrier_frame + 1) % int(self.reference_period)
+
+            if barrier_frame == start_barrier:
+                break
             
         return target_frame, barrier_frame
 
