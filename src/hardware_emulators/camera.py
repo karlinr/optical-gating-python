@@ -18,7 +18,7 @@ class CameraEmulator:
         self.is_running = False
         self.trigger_mode = False
         self.trigger_pin = None
-        self.frame_queue = queue.Queue(maxsize=1)
+        self.frame_queue = queue.Queue(maxsize=16)
         self._stop_event = threading.Event()
         self._trigger_event = threading.Event() # Internal signal for a hardware trigger
 
@@ -44,7 +44,7 @@ class CameraEmulator:
                     cls._shared_sock.settimeout(0.5)
                     cls._worker_thread = threading.Thread(target=cls._socket_worker, daemon=True)
                     cls._worker_thread.start()
-                    logger.info("Shared Emulator Listener started on port 5005.")
+                    logger.success("Shared Emulator Listener started on port 5005.")
                 except OSError as e:
                     logger.error(f"Failed to bind shared emulator socket: {e}")
 
@@ -62,23 +62,61 @@ class CameraEmulator:
                 continue
 
     def _check_trigger(self, states):
-        """Checks if this specific camera's GPIO pin was pulsed[cite: 1]."""
+        """Checks if this specific camera's GPIO pin was pulsed based on config.py mappings."""
         if self.trigger_mode and self.is_running:
-            # Check if the configured physical pin is high (1)[cite: 1]
-            if states.get(str(self.trigger_pin), 0) == 1:
-                self._trigger_event.set()
+            from app.config import Config
+            
+            # 1. Locate the camera configuration matching this instance's serial number
+            matched_config = None
+            if hasattr(Config.Cameras, 'BF') and Config.Cameras.BF.serial == self.serial_number:
+                matched_config = Config.Cameras.BF
+            elif hasattr(Config.Cameras, 'FL') and Config.Cameras.FL.serial == self.serial_number:
+                matched_config = Config.Cameras.FL
+
+            # 2. Extract and translate the pin mappings if a configuration was matched
+            if matched_config is not None:
+                for logical_bit in matched_config.box_pins:
+                    try:
+                        # Convert the logical bit value back to its string name (e.g., 1 -> 'FL_1')
+                        pin_name = Config.TimingBox.Logical(logical_bit).name
+                        # Look up the physical pin number assigned to that name (e.g., 'FL_1' -> 2)
+                        physical_pin = int(Config.TimingBox.Physical[pin_name])
+                        
+                        # 3. Check if the matching physical pin is active in the broadcasted states
+                        if states.get(str(physical_pin), 0) == 1:
+                            self._trigger_event.set()
+                            return  # Match found, exit early
+                    except (ValueError, KeyError):
+                        continue
+            else:
+                # Fallback to checking the raw unmapped trigger pin if no configuration matches
+                if states.get(str(self.trigger_pin), 0) == 1:
+                    self._trigger_event.set()
 
     def set_config(self, config):
         pass
 
-    def connect(self, serial_number):
-        self.serial_number = serial_number
+    def connect(self, config_or_sn):
+        """Connects the camera, handling either a raw string serial or a Config object."""
+        if hasattr(config_or_sn, 'serial'):
+            self.serial_number = config_or_sn.serial
+        else:
+            self.serial_number = config_or_sn
+
         with CameraEmulator._lock:
             if self not in CameraEmulator._listeners:
                 CameraEmulator._listeners.append(self)
-        logger.info(f"Emulator Camera SN {serial_number} connected.")
+        logger.success(f"Emulator Camera SN {self.serial_number} connected.")
 
     def start_acquisition(self):
+        # Clear out any frames remaining in the queue to emulate 
+        # driver-level buffer initialization upon starting acquisition.
+        while not self.frame_queue.empty():
+            try:
+                self.frame_queue.get_nowait()
+            except queue.Empty:
+                break
+
         self.is_running = True
         self._stop_event.clear()
         self.thread = threading.Thread(target=self._run_loop, daemon=True)
@@ -88,25 +126,25 @@ class CameraEmulator:
     def _run_loop(self):
         while self.is_running and not self._stop_event.is_set():
             if self.trigger_mode:
-                # Wait for the shared listener to flag a trigger event[cite: 1]
+                # Wait for the shared listener to flag a trigger event
                 if self._trigger_event.wait(timeout=0.1):
                     self._push_frame()
                     self._trigger_event.clear()
             else:
-                # Continuous mode: Simulate fixed framerate delay[cite: 1]
+                # Continuous mode: Simulate fixed framerate delay
                 time.sleep(1/80) 
                 self._push_frame()
 
     def _push_frame(self):
-        """Generates a synthetic 'heart' frame with two oscillating blobs[cite: 1]."""
+        """Generates a synthetic 'heart' frame with two oscillating blobs."""
         t = time.perf_counter() - self.t0
         freq = 2  # 2-second period
         
-        # Calculate oscillating blob sizes (chambers)[cite: 1]
+        # Calculate oscillating blob sizes (chambers)
         sigma1 = 25 + 10 * np.sin(2 * np.pi * freq * t)
         sigma2 = 25 + 10 * np.sin(2 * np.pi * freq * t + np.pi/2)
         
-        # Blob 1 (Left) and Blob 2 (Right)[cite: 1]
+        # Blob 1 (Left) and Blob 2 (Right)
         blob1 = np.exp(-((self.X - 180)**2 + (self.Y - 256)**2) / (2 * sigma1**2))
         blob2 = np.exp(-((self.X - 332)**2 + (self.Y - 256)**2) / (2 * sigma2**2))
         
@@ -114,16 +152,20 @@ class CameraEmulator:
         noise = np.random.randint(50, 100, (512, 512), dtype=np.uint8)
         frame = np.clip(pattern + noise, 0, 255).astype(np.uint8)
 
-        # Non-blocking put to keep the queue size at 1[cite: 1]
+        # Emulate driver buffer overwrite behavior when the queue limit is reached.
+        # The oldest unread frame is discarded to make room for the newest frame.
         if self.frame_queue.full():
             try:
                 self.frame_queue.get_nowait()
             except queue.Empty:
                 pass
+
         self.frame_queue.put((frame, t))
 
     def get_latest_frame(self, timeout_ms=1000):
         try:
+            # Log buffer size and wait time for debugging
+            logger.debug(f"Camera SN {self.serial_number} - Waiting for frame. Current queue size: {self.frame_queue.qsize()}. Timeout: {timeout_ms} ms.")
             return self.frame_queue.get(timeout=timeout_ms/1000.0)
         except queue.Empty:
             return None, None
@@ -131,7 +173,12 @@ class CameraEmulator:
     def stop_acquisition(self):
         self.is_running = False
         self._stop_event.set()
-        self._trigger_event.set() # Unblock the wait if triggered[cite: 1]
+        self._trigger_event.set() # Unblock the wait if triggered
+        
+        # Block the main thread until the background thread completely exits
+        if hasattr(self, 'thread') and self.thread.is_alive():
+            self.thread.join()
+            
         logger.info(f"Emulator Camera SN {self.serial_number} stopped.")
 
     def set_mode_continuous(self, framerate=80):

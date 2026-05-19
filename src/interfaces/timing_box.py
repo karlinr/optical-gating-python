@@ -31,7 +31,7 @@ class TimingBox:
 
     def connect(self):
         try:
-            self.ser = serial.Serial(self.port, 115200, timeout=1.0)
+            self.ser = serial.Serial(self.port, 115200, timeout=1.0, write_timeout=1.0)
             logger.info(f"Serial connection established on {self.port}")
             for i in range(6):
                 self.hard_reset()

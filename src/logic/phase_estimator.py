@@ -209,7 +209,7 @@ class SADEstimator(PhaseEstimator):
         offset, score = v_fitting(scores[best_idx - 1], scores[best_idx], scores[best_idx + 1])
         phase = ((best_idx + offset - NUM_EXTRA_REF_FRAMES) / self.reference_period) * TWO_PI
 
-        logger.info(f"SAD Estimate: Best Index={best_idx}, Offset={offset:.2f}, Score={score:.2f}")
+        logger.debug(f"SAD Estimate: Best Index={best_idx}, Offset={offset:.2f}, Score={score:.2f}")
         
         return {
             "phase": phase % TWO_PI,
@@ -303,7 +303,7 @@ class MLEEstimator(PhaseEstimator):
             vertex_offset = 0
             logger.warning("MLE parabola fitting failed. Defaulting vertex offset to 0.")
 
-        logger.info(f"MLE Estimate: Best Bin={best_idx}, Offset={vertex_offset:.2f}, Score={score:.2f}")
+        logger.debug(f"MLE Estimate: Best Bin={best_idx}, Offset={vertex_offset:.2f}, Score={score:.2f}")
 
         phase_radians = ((best_idx + vertex_offset) % n_bins / n_bins) * TWO_PI
         

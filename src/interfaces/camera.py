@@ -74,7 +74,7 @@ class XimeaCamera:
     def stop_acquisition(self):
         try:
             self.cam.stop_acquisition()
-            logger.info(f"Camera SN {self.serial_number} acquisition stopped.")
+            logger.success(f"Camera SN {self.serial_number} acquisition stopped.")
         except xiapi.Xi_error as e:
             logger.error(f"Failed to stop acquisition on camera SN {self.serial_number}: {e}")
             raise

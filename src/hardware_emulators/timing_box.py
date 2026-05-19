@@ -110,7 +110,13 @@ class TimingBoxEmulator:
             pin_states = {i: ((self.logical_mask >> self.pin_mappings[i][0]) & 1) ^ self.pin_mappings[i][1] for i in range(12)}
             self.broadcast_socket.sendto(json.dumps(pin_states).encode(), ("127.0.0.1", self.broadcast_port))
             
-            time.sleep(duration_ticks * self.TICK_SEC)
+            # Tick-locked timing to avoid drift from sleep overshoot.
+            target_tick = (self.get_current_ticks() + duration_ticks) & 0xFFFFFF
+            while self.is_running and not self.stop_signal.is_set():
+                now = self.get_current_ticks()
+                if ((now - target_tick) & 0xFFFFFF) < 0x800000:
+                    break
+                time.sleep(0.0005)
             
             if current_step >= self.final_step:
                 if self.is_repeating:
@@ -168,6 +174,9 @@ class TimingBoxEmulator:
                 # diff = (target - current) mod 2^24
                 diff = (self.scheduled_fire_time - current_ticks) & 0xFFFFFF
                 is_future = 1 if diff < 0x800000 else 0
+
+                if not is_future:
+                    logger.warning(f"FIRE_AT target {self.scheduled_fire_time} is in the past relative to current tick {current_ticks}.")
                 
                 response = bytes([is_future]) + current_ticks.to_bytes(3, 'big')
                 self.ser.write(response)
@@ -218,7 +227,7 @@ class TimingBoxEmulator:
                 self.check_scheduler()
                 
                 # Small sleep to prevent CPU spiking while maintaining precision
-                time.sleep(0.0001)
+                #time.sleep(0.0001)
         except KeyboardInterrupt:
             self.ser.close()
 

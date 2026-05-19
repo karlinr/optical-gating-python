@@ -23,7 +23,7 @@ def v_fitting(y_1, y_2, y_3):
     
     return x, y
 
-@njit(parallel = True)
+@njit(parallel = True, cache = True)
 def chi_sq(test_frame, binned_frames, noise_est):
     """
     Compute chi-squared values for a test frame against multiple binned frames with noise estimates.
@@ -47,7 +47,7 @@ def chi_sq(test_frame, binned_frames, noise_est):
 
     return chi_sq_terms
 
-@njit(parallel=True, fastmath=True)
+@njit(parallel=True, fastmath=True, cache=True)
 def sad_with_references(test_frame, reference_stack):
     """
     Compute Sum of Absolute Differences (SAD) between a test frame and multiple reference frames.
