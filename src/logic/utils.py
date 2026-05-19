@@ -1,6 +1,9 @@
-from numba import njit, prange
+from numba import njit, prange, set_num_threads
 import numpy as np
 from loguru import logger
+from app.config import Config
+
+set_num_threads(Config.ExperimentConfig.NUM_THREADS)
 
 def v_fitting(y_1, y_2, y_3):
     """
@@ -15,6 +18,7 @@ def v_fitting(y_1, y_2, y_3):
     
     # Handle non-V shapes or flat lines
     if denominator <= 0:
+        logger.warning(f"V-fitting failed: flat or non-V shape encountered (y1={y_1}, y2={y_2}, y3={y_3}). Defaulting offset to 0.0.")
         return 0.0, float(y_2)
     
     # Calculate vertex coordinates

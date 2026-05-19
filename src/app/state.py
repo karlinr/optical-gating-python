@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from enum import Enum, auto
 
+from loguru import logger
+
 @dataclass
 class UIEvent:
     topic: str
@@ -35,6 +37,7 @@ class AppState:
     def send_event(self, topic, payload=None):
         event = UIEvent(topic=topic, payload=payload)
         self.event_queue.put(event)
+        logger.debug(f"Event sent: {topic} with payload: {payload}")
 
     def get_next_event(self):
         try:
@@ -47,6 +50,7 @@ class AppState:
             self._current_state = new_state
 
         self.send_event("STATE_CHANGED", new_state.name)
+        logger.info(f"State changed to: {new_state.name}")
 
     def get_state(self):
         with self._lock:

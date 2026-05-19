@@ -59,7 +59,7 @@ class TimingBox:
         payload = bytearray([cmd_byte, *(data or [])])
         self.ser.write(payload)
         self.ser.flush()
-        logger.info(f"Sent {cmd_name}: {payload.hex()}")
+        logger.success(f"Sent {cmd_name}: {payload.hex()}")
 
     def map_pin(self, physical_pin, logical_pin, invert=False):
         """
@@ -209,55 +209,3 @@ class TimingBox:
         """Formats a tick count into a human-readable string with seconds and ticks."""
         seconds = ticks * TimingBox.TICK_SEC
         return f"{seconds:.6f}s ({ticks} ticks)"
-
-if __name__ == "__main__":
-    
-    box = TimingBox(port= Config.TimingBox.TEST_PORT) 
-    box.connect()
-
-    try:
-        print("\nConfiguring Pin Mappings...")
-        box.map_pin(physical_pin=10, logical_pin=0, invert=True)
-        mapping = box.get_pin_mapping(10)
-        print(f"Result: Physical 10 -> Logical {mapping[0]} (Inverted: {mapping[1]})")
-
-        print("\nUploading Pianola Sequence...")
-        box.add_step(logical_pins=[0], duration_ticks=TimingBox.to_24bit(0.5 / box.TICK_SEC))  # 0.5 seconds in ticks
-        box.add_step(logical_pins=[1], duration_ticks=TimingBox.to_24bit(0.5 / box.TICK_SEC))  # 0.5 seconds in ticks
-
-        box.finalize_sequence(repeat=False)
-        print("Sequence uploaded and finalized.")
-
-        print("\nTesting Immediate Execution (RUN_NOW)...")
-        start_tick = box.run_now()
-        print(f"Manual trigger started at tick: {start_tick}")
-        time.sleep(1.2) # Wait for sequence to finish
-
-        print("\nTesting Scheduled Execution (FIRE_AT)...")
-        
-        current_time = box.get_current_time()
-        delay_ticks = TimingBox.to_24bit(2.0 / box.TICK_SEC)  # Schedule for 2 seconds in the future
-        future_tick = (current_time + delay_ticks) & 0xFFFFFF
-        
-        print(f"Current Tick: {current_time}")
-        print(f"Scheduling fire for tick: {future_tick} (~2.0s from now)")
-        
-        trig_time, success = box.fire_at(future_tick)
-        
-        if success:
-            print(f"✔ Emulator acknowledged the future fire time at tick: {trig_time}.")
-            print("Waiting for trigger... (Watch the Emulator console)")
-            
-            time.sleep(3.0)
-        else:
-            print("✘ Emulator rejected the fire time (indicated it is in the past).")
-
-    except Exception as e:
-        print(f"An error occurred during testing: {e}")
-
-    finally:
-        print("\n[CLEANUP] Stopping and resetting hardware...")
-        box.stop()
-        box.hard_reset()
-        box.close()
-        print("Test suite complete.")

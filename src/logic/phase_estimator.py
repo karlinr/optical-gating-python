@@ -73,7 +73,7 @@ class SADEstimator(PhaseEstimator):
 
         target_frame, barrier_frame = self._pick_frames()
 
-        print(f"Target Frame: {target_frame:.2f}, Barrier Frame: {barrier_frame:.2f}")
+        logger.info(f"Target Frame: {target_frame:.2f}, Barrier Frame: {barrier_frame:.2f}")
         
         self.target_phase = TWO_PI * (target_frame / self.reference_period)
         self.barrier_phase = TWO_PI * (barrier_frame / self.reference_period)
@@ -98,7 +98,6 @@ class SADEstimator(PhaseEstimator):
         # Calculate Period length
         period = self._calculate_period_length(diffs)
         if period != -1:
-            logger.info(f"Estimated period: {period:.2f} frames")
             self.period_history.append(period)
 
         # Stability check: Requires 5 + 2*padding frames of history

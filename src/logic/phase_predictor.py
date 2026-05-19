@@ -1,3 +1,4 @@
+from loguru import logger
 import numpy as np
 from app.config import Config
 from abc import ABC, abstractmethod
@@ -58,6 +59,7 @@ class BarrierPredictor(PhasePredictor):
         slope, intercept = np.polyfit(fit_times, fit_phases, 1)
 
         if slope <= 1e-6:
+            logger.debug("Slope too small for reliable prediction. Returning None.")
             return None
 
         phase_dist_to_target = (target_phase - current_wrapped) % TWO_PI

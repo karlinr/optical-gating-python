@@ -17,8 +17,8 @@ import cProfile
 import matplotlib.pyplot as plt
 
 logger.remove()
-logger.add(sys.stderr, level="INFO", format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>", enqueue=True)
-logger.add("logs/main/experiment_{time}.log", rotation="10 MB", level="DEBUG", retention="10 days", enqueue=True)
+logger.add(sys.stderr, level=Config.ExperimentConfig.LOGGING_LEVEL, format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>", enqueue=True)
+logger.add("logs/main/experiment_{time}.log", rotation="10 MB", level=Config.ExperimentConfig.LOGGING_LEVEL, retention="10 days", enqueue=True)
 
 # Key note to self: We primarily use the BF time as the current timestamp and only convert to ticks when sending commands to the timing box 
 
@@ -67,7 +67,7 @@ def main():
             sad_phase_history.append(results.get("SAD", {}).get("phase", None))
             mle_phase_history.append(results.get("MLE", {}).get("phase", None))
             timestamp_history.append(timestamp)
-            logger.info(f"Status: {results["status"]}")
+            logger.debug(f"Status: {results["status"]}")
 
             # Do prediction
             if results["status"] == "READY":
