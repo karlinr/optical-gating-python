@@ -15,8 +15,26 @@ class SystemController:
         self.timing_box = TimingBox(port = Config.TimingBox.PORT)
         self.bf_cam = XimeaCamera()
         self.fl_cam = XimeaCamera()
-
         self.last_timestamp = 0
+
+    def __enter__(self):
+        """Allows SystemController to be used as a context manager."""
+        logger.info("Entering SystemController hardware context.")
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Guarantees safe hardware teardown upon context exit."""
+        logger.info("Exiting SystemController context. Commencing hardware teardown...")
+        try:
+            self.timing_box.stop()
+            self.timing_box.close()
+            self.bf_cam.close()
+            self.fl_cam.close()
+            logger.success("All hardware components shut down.")
+        except Exception as e:
+            logger.error(f"Error during hardware context cleanup: {e}")
+        
+        return False
 
     def connect_all(self):
         """

@@ -24,13 +24,10 @@ logger.add("logs/main/experiment_{time}.log", rotation="10 MB", level=Config.Exp
 
 def main():
     app_state = AppState()
-    controller = SystemController(app_state = app_state)
-
     storage_path = Config.ExperimentConfig.EXPERIMENT_DATA_PATH 
+    firing = False  
 
-    firing = False   
-
-    try:
+    with SystemController(app_state=app_state) as controller:
         bf_test_frame, fl_test_frame = controller.connect_all()
         logger.info("All hardware components connected successfully.")
 
@@ -135,23 +132,5 @@ def main():
         plt.legend()
         plt.show()
 
-    except KeyboardInterrupt:
-        logger.info("Experiment interrupted by user. Shutting down.")
-    except Exception as e:
-        logger.error(f"An error occurred: {e}")
-    finally:
-        controller.timing_box.stop()
-        controller.timing_box.close()
-        controller.bf_cam.close()
-        controller.fl_cam.close()
-        logger.success("All hardware components shut down gracefully.")
-
 if __name__ == "__main__":
-    """profiler = cProfile.Profile()
-    profiler.enable()"""
-
     main()
-
-    """profiler.disable()
-    stats = pstats.Stats(profiler).sort_stats('tottime')
-    stats.print_stats(20)"""
