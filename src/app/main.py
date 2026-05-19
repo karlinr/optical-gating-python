@@ -125,10 +125,10 @@ def main():
         unwrapped_phases = np.unwrap(np.array(sad_phase_history)[np.where(np.array(sad_phase_history) != None)])
         delta_phases = np.diff(unwrapped_phases)
         mle_unwrapped_phases = np.unwrap(np.array(mle_phase_history)[np.where(np.array(mle_phase_history) != None)])
-        mle_phase_history
+        mle_delta_phases = np.diff(mle_unwrapped_phases)
 
         plt.scatter(np.array(sad_phase_history)[np.where(np.array(sad_phase_history) != None)][1:], delta_phases, label="SAD")
-        plt.scatter(np.array(mle_phase_history)[np.where(np.array(mle_phase_history) != None)][1:], np.diff(mle_unwrapped_phases), color="orange", label="MLE")
+        plt.scatter(np.array(mle_phase_history)[np.where(np.array(mle_phase_history) != None)][1:], mle_delta_phases, color="orange", label="MLE")
         plt.xlabel("Time (s)")
         plt.ylabel("Phase Difference (radians)")
         plt.title("Phase Estimation Comparison")

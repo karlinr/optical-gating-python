@@ -78,6 +78,8 @@ class SADEstimator(PhaseEstimator):
         self.target_phase = TWO_PI * (target_frame / self.reference_period)
         self.barrier_phase = TWO_PI * (barrier_frame / self.reference_period)
         self._ready = True
+
+        self.frame_history = []
         
         logger.info(f"SAD Model Built: Period={period:.2f}, Target Phase={self.target_phase:.2f}, Barrier Phase={self.barrier_phase:.2f}")
         return True
@@ -278,7 +280,7 @@ class MLEEstimator(PhaseEstimator):
         logger.info("MLE Estimator model built. Ready for estimation.")
      
         self._ready = True
-        self.frame_history = [] # Clear history to save memory after build
+        self.frame_history = []
 
     def estimate(self, frame):
         # Calculate chi-squared scores
