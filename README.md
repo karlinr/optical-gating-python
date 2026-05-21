@@ -19,7 +19,7 @@ src/
 │   ├── phase_predictor.py # Future prediction logic
 │   ├── drift_corrector.py # (Placeholder) Drift correction
 │   └── utils.py           # SAD, chi-squared, V-fitting
-└── hardware_emulators/ (NOTE: These were written using AI for testing)
+└── hardware_emulators/ (NOTE: These were written using AI and will be removed after completion)
     ├── camera.py          # Software camera emulator (generates synthetic heart frames)
     └── timing_box.py      # Software timing box emulator (runs in a separate process)
 ```
