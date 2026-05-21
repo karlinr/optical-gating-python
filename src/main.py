@@ -64,9 +64,14 @@ def run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigg
         os.makedirs(f"{storage_path}/fluorescence")
         logger.info(f"Created storage directory at {storage_path}/fluorescence")
 
+    if not os.path.exists(f"{storage_path}/brightfield"):
+        os.makedirs(f"{storage_path}/brightfield")
+        logger.info(f"Created storage directory at {storage_path}/brightfield")
+
     for i in range(iterations):
         # Grab latest brightfield frame, timestamp, and instant framerate
         frame, timestamp, framerate = controller.get_latest_bf_frame()
+        tf.imwrite(f"{storage_path}/brightfield/bf_frame_{timestamp}.tif", frame)
 
         # Update our phase estimate based on the new frame
         phase_results = phase_manager.update(frame, timestamp=timestamp)

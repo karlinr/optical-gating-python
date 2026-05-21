@@ -14,8 +14,8 @@ class CameraEmulator:
     _worker_thread = None
 
     def __init__(self):
-        self.width = 256
-        self.height = 256
+        self.width = 32
+        self.height = 32
 
 
         self.serial_number = None
@@ -162,7 +162,7 @@ class CameraEmulator:
     def _push_frame(self):
         """Generates a synthetic 16-bit 'heart' frame utilizing the full uint16 range."""
         t = time.perf_counter() - self.t0
-        freq = 1
+        freq = 2
         
         global_phase = 2 * np.pi * freq * t
         
@@ -170,7 +170,7 @@ class CameraEmulator:
         pattern = 32768 + 25000 * np.cos(global_phase + self.pixel_offsets)
         
         # Generate 16-bit sensor background noise
-        noise = np.random.randint(200, 800, (self.height, self.width), dtype=np.uint16)
+        noise = np.random.randint(200, 1000, (self.height, self.width), dtype=np.uint16)
         
         # Clamp strictly to maximum 16-bit integer boundaries
         frame = np.clip(pattern + noise, 0, 65535).astype(np.uint16)

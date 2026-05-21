@@ -5,7 +5,7 @@ from interfaces.timing_box import TimingBox
 from app.config import Config
 
 if Config.EMULATE_CAMERA:
-    from hardware_emulators.camera import CameraEmulator as XimeaCamera
+    from emulators.camera import CameraEmulator as XimeaCamera
 else:
     from interfaces.camera import XimeaCamera
 

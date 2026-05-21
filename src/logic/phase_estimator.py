@@ -305,13 +305,15 @@ class MLEEstimator(PhaseEstimator):
 
         logger.debug(f"MLE Estimate: Best Bin={best_idx}, Offset={vertex_offset:.2f}, Score={score:.2f}")
 
-        phase_radians = ((best_idx + vertex_offset) % n_bins / n_bins) * 2 * np.pi
+        phase_radians = ((best_idx + vertex_offset + 0.5) % n_bins / n_bins) * 2 * np.pi
+        uncertainty_bins = np.sqrt(score / a)
+        uncertainty_radians = uncertainty_bins * (2 * np.pi / n_bins)
         
         return {
             "phase": phase_radians,
             "metrics": {
                 "reduced_chi_squared": score,
-                "uncertainty_estimate": np.sqrt(1 / np.abs(coeffs[0])) if coeffs[0] != 0 else float('inf'),
+                "uncertainty_estimate": uncertainty_radians,
                 "best_bin": best_idx,
                 "vertex_offset": vertex_offset
             }

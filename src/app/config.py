@@ -2,10 +2,12 @@ from enum import IntEnum
 from dataclasses import dataclass, field
 from typing import List, Tuple, Optional
 from ximea import xiapi
+from pathlib import Path
 
 class ExperimentConfig:
     # Paths for saving data and logs
-    DATA_ROOT = "data"
+    PARENT_ROOT = Path(__file__).parents[2]
+    DATA_ROOT = PARENT_ROOT / "data"
     EXPERIMENT_NAME = "default_experiment"
     EXPERIMENT_DATA_PATH = f"{DATA_ROOT}/{EXPERIMENT_NAME}"
 
