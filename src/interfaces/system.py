@@ -10,8 +10,7 @@ else:
     from interfaces.camera import XimeaCamera
 
 class SystemController:
-    def __init__(self, app_state):
-        self.app_state = app_state
+    def __init__(self):
         self.timing_box = TimingBox(port = Config.TimingBox.PORT)
         self.bf_cam = XimeaCamera()
         self.fl_cam = XimeaCamera()
@@ -185,10 +184,17 @@ class SystemController:
         """
         Retrieves the latest frame and timestamp from the brightfield camera.
         """
+        
         frame, timestamp = self.bf_cam.get_latest_frame()
-        self.app_state.send_event("NEW_BF_FRAME", timestamp)
-        self.app_state.update_frame(frame)
-        return frame, timestamp
+
+        logger.debug(f"Framerate: {1 / (timestamp - self.last_timestamp)}, Timestamp: {timestamp}")
+
+        framerate = 1 / (timestamp - self.last_timestamp) if self.last_timestamp else float('inf')
+
+        self.last_timestamp = timestamp
+
+
+        return frame, timestamp, framerate
     
     def get_latest_fl_frame(self):
         """
@@ -196,7 +202,6 @@ class SystemController:
         """
         try:
             frame, timestamp = self.fl_cam.get_latest_frame()
-            self.app_state.send_event("NEW_FL_FRAME", timestamp)
             return frame, timestamp
         except Exception as e:
             logger.error(f"Error getting frame from fluorescence camera: {e}")

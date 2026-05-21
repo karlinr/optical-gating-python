@@ -14,10 +14,15 @@ class CameraEmulator:
     _worker_thread = None
 
     def __init__(self):
+        self.width = 256
+        self.height = 256
+
+
         self.serial_number = None
         self.is_running = False
         self.trigger_mode = False
         self.trigger_pin = None
+        self.framerate = 80  # Stored dynamically to calculate exact deadlines
         self.frame_queue = queue.Queue(maxsize=16)
         self._stop_event = threading.Event()
         self._trigger_event = threading.Event() # Internal signal for a hardware trigger
@@ -25,9 +30,10 @@ class CameraEmulator:
         self.t0 = time.perf_counter()
 
         # Pre-compute coordinates for frame generation
-        self.x_coord = np.arange(512)
-        self.y_coord = np.arange(512)
+        self.x_coord = np.arange(self.width)
+        self.y_coord = np.arange(self.height)
         self.X, self.Y = np.meshgrid(self.x_coord, self.y_coord)
+        self.pixel_offsets = np.random.uniform(0, 2 * np.pi, (self.height, self.width)).astype(np.float32)
         
         # Initialize the shared listener
         self._ensure_shared_listener()
@@ -124,36 +130,51 @@ class CameraEmulator:
         logger.info(f"Emulator Camera SN {self.serial_number} acquisition started.")
 
     def _run_loop(self):
+        """High-precision, drift-corrected execution loop."""
+        frame_interval = 1.0 / self.framerate
+        next_frame_deadline = time.perf_counter()
+
         while self.is_running and not self._stop_event.is_set():
             if self.trigger_mode:
-                # Wait for the shared listener to flag a trigger event
+                # Trigger mode: Wait directly for hardware simulation events
                 if self._trigger_event.wait(timeout=0.1):
                     self._push_frame()
                     self._trigger_event.clear()
             else:
-                # Continuous mode: Simulate fixed framerate delay
-                time.sleep(1/80) 
+                # Continuous mode: Enforce deterministic temporal intervals
+                now = time.perf_counter()
+                
+                # Drop/skip catching up mechanisms if the host system hangs severely
+                if now > next_frame_deadline + (2.0 * frame_interval):
+                    next_frame_deadline = now
+
+                # Calculate remaining time to wait until this iteration's target deadline
+                sleep_duration = next_frame_deadline - now
+                if sleep_duration > 0:
+                    time.sleep(sleep_duration)
+
+                # Generate the physical data matrices
                 self._push_frame()
 
-    def _push_frame(self):
-        """Generates a synthetic 'heart' frame with two oscillating blobs."""
-        t = time.perf_counter() - self.t0
-        freq = 2  # 2-second period
-        
-        # Calculate oscillating blob sizes (chambers)
-        sigma1 = 25 + 10 * np.sin(2 * np.pi * freq * t)
-        sigma2 = 25 + 10 * np.sin(2 * np.pi * freq * t + np.pi/2)
-        
-        # Blob 1 (Left) and Blob 2 (Right)
-        blob1 = np.exp(-((self.X - 180)**2 + (self.Y - 256)**2) / (2 * sigma1**2))
-        blob2 = np.exp(-((self.X - 332)**2 + (self.Y - 256)**2) / (2 * sigma2**2))
-        
-        pattern = (blob1 + blob2) * 255
-        noise = np.random.randint(50, 100, (512, 512), dtype=np.uint8)
-        frame = np.clip(pattern + noise, 0, 255).astype(np.uint8)
+                # Increment target deadline by a strict mathematical stride
+                next_frame_deadline += frame_interval
 
-        # Emulate driver buffer overwrite behavior when the queue limit is reached.
-        # The oldest unread frame is discarded to make room for the newest frame.
+    def _push_frame(self):
+        """Generates a synthetic 16-bit 'heart' frame utilizing the full uint16 range."""
+        t = time.perf_counter() - self.t0
+        freq = 1
+        
+        global_phase = 2 * np.pi * freq * t
+        
+        # Vectorized 16-bit scaling: Midpoint baseline at 32,768 with a wave amplitude of 25,000
+        pattern = 32768 + 25000 * np.cos(global_phase + self.pixel_offsets)
+        
+        # Generate 16-bit sensor background noise
+        noise = np.random.randint(200, 800, (self.height, self.width), dtype=np.uint16)
+        
+        # Clamp strictly to maximum 16-bit integer boundaries
+        frame = np.clip(pattern + noise, 0, 65535).astype(np.uint16)
+
         if self.frame_queue.full():
             try:
                 self.frame_queue.get_nowait()
@@ -164,7 +185,6 @@ class CameraEmulator:
 
     def get_latest_frame(self, timeout_ms=1000):
         try:
-            # Log buffer size and wait time for debugging
             logger.debug(f"Camera SN {self.serial_number} - Waiting for frame. Current queue size: {self.frame_queue.qsize()}. Timeout: {timeout_ms} ms.")
             return self.frame_queue.get(timeout=timeout_ms/1000.0)
         except queue.Empty:
@@ -183,6 +203,7 @@ class CameraEmulator:
 
     def set_mode_continuous(self, framerate=80):
         self.trigger_mode = False
+        self.framerate = framerate  # Explicitly bind the target parameter
         self.stop_acquisition()
         self.start_acquisition()
 

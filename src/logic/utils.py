@@ -27,7 +27,7 @@ def v_fitting(y_1, y_2, y_3):
     
     return x, y
 
-@njit(parallel = True, cache = True)
+@njit(parallel=True, cache=True)
 def chi_sq(test_frame, binned_frames, noise_est):
     """
     Compute chi-squared values for a test frame against multiple binned frames with noise estimates.
@@ -71,3 +71,10 @@ def sad_with_references(test_frame, reference_stack):
         sad_scores[i] = acc
         
     return sad_scores
+
+_warmup_frame = np.zeros((512, 512), dtype=np.uint16)
+_warmup_stack = np.zeros((2, 512, 512), dtype=np.uint16)
+_warmup_floats = np.zeros((2, 512, 512), dtype=np.float32)
+
+sad_with_references(_warmup_frame, _warmup_stack)
+chi_sq(_warmup_frame, _warmup_floats, _warmup_floats)

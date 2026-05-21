@@ -7,9 +7,6 @@ from typing import Optional, Tuple, Dict, List, Any
 from logic.utils import v_fitting, chi_sq, sad_with_references 
 from app.config import Config
 
-TWO_PI = 2 * np.pi
-NUM_EXTRA_REF_FRAMES = 2
-
 class PhaseEstimator(ABC):
     def __init__(self):
         self._ready = False
@@ -75,8 +72,8 @@ class SADEstimator(PhaseEstimator):
 
         logger.info(f"Target Frame: {target_frame:.2f}, Barrier Frame: {barrier_frame:.2f}")
         
-        self.target_phase = TWO_PI * (target_frame / self.reference_period)
-        self.barrier_phase = TWO_PI * (barrier_frame / self.reference_period)
+        self.target_phase = 2 * np.pi * (target_frame / self.reference_period)
+        self.barrier_phase = 2 * np.pi * (barrier_frame / self.reference_period)
         self._ready = True
 
         self.frame_history = []
@@ -101,15 +98,15 @@ class SADEstimator(PhaseEstimator):
             self.period_history.append(period)
 
         # Stability check: Requires 5 + 2*padding frames of history
-        history_stable = len(self.period_history) >= (5 + (2 * NUM_EXTRA_REF_FRAMES))
+        history_stable = len(self.period_history) >= (5 + (2 * Config.Gating.NUM_EXTRA_REF_FRAMES))
 
         if period != -1 and period > 6 and history_stable:
-            period_to_use = self.period_history[-1 - NUM_EXTRA_REF_FRAMES]
+            period_to_use = self.period_history[-1 - Config.Gating.NUM_EXTRA_REF_FRAMES]
             
-            if (len(self.period_history) - 1 - NUM_EXTRA_REF_FRAMES) <= 0 or period_to_use <= 6:
+            if (len(self.period_history) - 1 - Config.Gating.NUM_EXTRA_REF_FRAMES) <= 0 or period_to_use <= 6:
                 return None, None, None
                 
-            num_refs = int(period_to_use + 1) + (2 * NUM_EXTRA_REF_FRAMES)
+            num_refs = int(period_to_use + 1) + (2 * Config.Gating.NUM_EXTRA_REF_FRAMES)
             
             start = len(past_frames) - num_refs
             stop = len(past_frames)
@@ -168,11 +165,11 @@ class SADEstimator(PhaseEstimator):
     def _pick_frames(self):
         """Automatically identify target and barrier frames."""
         total_frames = len(self.reference_frames)
-        stop_index = total_frames - NUM_EXTRA_REF_FRAMES
+        stop_index = total_frames - Config.Gating.NUM_EXTRA_REF_FRAMES
 
         # Calculate deltas between consecutive frames in the sequence
-        f1s = self.reference_frames[NUM_EXTRA_REF_FRAMES : stop_index]
-        f2s = self.reference_frames[NUM_EXTRA_REF_FRAMES + 1 : stop_index + 1]
+        f1s = self.reference_frames[Config.Gating.NUM_EXTRA_REF_FRAMES : stop_index]
+        f2s = self.reference_frames[Config.Gating.NUM_EXTRA_REF_FRAMES + 1 : stop_index + 1]
         deltas = np.sum(np.abs(f1s.astype(np.int32) - f2s.astype(np.int32)), axis=(1, 2))
 
         # Find the frame with the maximum delta (largest change)
@@ -205,19 +202,21 @@ class SADEstimator(PhaseEstimator):
     def estimate(self, frame):
         """Estimates the phase and returns (phase, score)."""
         scores = sad_with_references(frame, self.reference_frames)
-        best_idx = np.argmin(scores[NUM_EXTRA_REF_FRAMES : -NUM_EXTRA_REF_FRAMES]) + NUM_EXTRA_REF_FRAMES
+        best_idx = np.argmin(scores[Config.Gating.NUM_EXTRA_REF_FRAMES : -Config.Gating.NUM_EXTRA_REF_FRAMES]) + Config.Gating.NUM_EXTRA_REF_FRAMES
         
         offset, score = v_fitting(scores[best_idx - 1], scores[best_idx], scores[best_idx + 1])
-        phase = ((best_idx + offset - NUM_EXTRA_REF_FRAMES) / self.reference_period) * TWO_PI
+        phase = ((best_idx + offset - Config.Gating.NUM_EXTRA_REF_FRAMES) / self.reference_period) * 2 * np.pi
 
         logger.debug(f"SAD Estimate: Best Index={best_idx}, Offset={offset:.2f}, Score={score:.2f}")
         
         return {
-            "phase": phase % TWO_PI,
-            "mean_absolute_error": score,
-            "target_phase": self.target_phase,
-            "barrier_phase": self.barrier_phase
+            "phase": phase % (2 * np.pi),
+            "metrics": {
+                "sad_score": score,
+                "best_index": best_idx,
+                "offset": offset
             }
+        }
     
 class MLEEstimator(PhaseEstimator):
     def __init__(self):
@@ -246,7 +245,7 @@ class MLEEstimator(PhaseEstimator):
         frames = np.stack([h[0] for h in self.frame_history])
         phases = np.array([h[1] for h in self.frame_history])
 
-        bins = np.linspace(0, TWO_PI, n_bins + 1)
+        bins = np.linspace(0, 2 * np.pi, n_bins + 1)
         bin_indices = np.digitize(phases, bins) - 1
         bin_indices[bin_indices == n_bins] = 0
 
@@ -306,65 +305,58 @@ class MLEEstimator(PhaseEstimator):
 
         logger.debug(f"MLE Estimate: Best Bin={best_idx}, Offset={vertex_offset:.2f}, Score={score:.2f}")
 
-        phase_radians = ((best_idx + vertex_offset) % n_bins / n_bins) * TWO_PI
+        phase_radians = ((best_idx + vertex_offset) % n_bins / n_bins) * 2 * np.pi
         
         return {
             "phase": phase_radians,
-            "target_phase": None,
-            "reduced_chi_squared": score,
-            "uncertainty": 1 / (2 * a) if a != 0 else np.inf
+            "metrics": {
+                "reduced_chi_squared": score,
+                "uncertainty_estimate": np.sqrt(1 / np.abs(coeffs[0])) if coeffs[0] != 0 else float('inf'),
+                "best_bin": best_idx,
+                "vertex_offset": vertex_offset
+            }
         }
     
 class PhaseManager:
-    def __init__(self, app_state):
-        self.app_state = app_state
-
+    def __init__(self):
         self.estimators = {
             "SAD": SADEstimator(),
             "MLE": MLEEstimator()
         }
 
-    def update(self, frame, timestamp):
+    def update(self, frame, timestamp) -> dict:
         source = Config.Gating.PHASE_SOURCE
-        enabled_estimators = Config.Gating.ENABLED_ESTIMATORS
-        active_estimators = {name for name in enabled_estimators}
-        active_estimators.add(source)
+        
+        # Determine which estimators need to run based on configuration
+        to_run = set(Config.Gating.ENABLED_ESTIMATORS) | {source}
+        # The MLE method needs the SAD to bootstrap
+        if "MLE" in to_run and not self.estimators["MLE"].is_ready():
+            to_run.add("SAD")
 
-        if "MLE" in active_estimators and not self.estimators["MLE"].is_ready():
-            active_estimators.add("SAD")
+        # Run the updates
+        outputs = {}
+        if "SAD" in to_run:
+            outputs["SAD"] = self.estimators["SAD"].update(frame, timestamp=timestamp)
+            
+        if "MLE" in to_run:
+            sad_phase = outputs["SAD"]["phase"] if outputs.get("SAD") else None
+            outputs["MLE"] = self.estimators["MLE"].update(frame, phase=sad_phase)
 
-        results = {"status": "UNKNOWN"}
-        sad_phase = None
+        # Get the results dictionary ready
+        response = {}
+        for name in Config.Gating.ENABLED_ESTIMATORS:
+            response[name] = outputs.get(name) or {"phase": None, "metrics": {}}
 
-        # SAD method
-        if "SAD" in active_estimators:
-            sad_results = self.estimators["SAD"].update(frame, timestamp=timestamp)
+        # Set the status
+        is_ready = self.estimators[source].is_ready()
+        status = "READY" if is_ready else f"{source}_COLLECTING_FRAMES"
 
-            if sad_results is not None:
-                results["SAD"] = sad_results
-                sad_phase = sad_results["phase"]
+        response["ACTIVE"] = {
+            "status": status,
+            "phase": outputs[source]["phase"] if is_ready else None,
+            "target_phase": self.estimators["SAD"].target_phase if is_ready else None,
+            "barrier_phase": self.estimators["SAD"].barrier_phase if is_ready else None,
+            "metrics": outputs[source]["metrics"] if is_ready else {}
+        }
 
-        # MLE method
-        if "MLE" in active_estimators and sad_phase is not None:
-            mle_results = self.estimators["MLE"].update(frame, phase=sad_phase)
-
-            if mle_results is not None:
-                results["MLE"] = mle_results
-
-        if self.estimators["SAD"].is_ready():
-            results["gating"] = {
-                "target_phase": self.estimators["SAD"].target_phase,
-                "barrier_phase": self.estimators["SAD"].barrier_phase
-            }
-
-        primary_estimator = self.estimators.get(source)
-        if primary_estimator and primary_estimator.is_ready():
-            results["status"] = "READY"
-        else:
-            if source == "SAD":
-                results["status"] = "SAD_COLLECTING_FRAMES"
-            elif source == "MLE":
-                results["status"] = "MLE_COLLECTING_FRAMES"
-
-        self.app_state.send_event("ESTIMATOR_STATUS", {"status": results["status"]})
-        return results
+        return response

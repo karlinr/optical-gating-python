@@ -13,7 +13,7 @@ class ExperimentConfig:
     BRIGHTFIELD_CHUNK_SIZE = 100
     FLUORESCENCE_CHUNK_SIZE = 1
     NUM_THREADS = 6
-    LOGGING_LEVEL = "DEBUG"
+    LOGGING_LEVEL = "INFO"
 
 # Timing box and pin mapping
 class TimingBox:
@@ -99,6 +99,7 @@ class Gating:
     ENABLED_ESTIMATORS = ["SAD", "MLE"]
 
     # SAD parameters
+    NUM_EXTRA_REF_FRAMES = 2
     MIN_PERIOD = 5
     LOWER_THRESHOLD_FACTOR = 0.5
     UPPER_THRESHOLD_FACTOR = 0.75
@@ -106,14 +107,21 @@ class Gating:
 
     # MLE parameters
     MLE_BOOTSTRAP_FRAMES = 2000
-    MLE_BINS = 40
+    MLE_BINS = 30
     MLE_MIN_NOISE = 1
     MLE_FIT_POINTS = 5
 
     # Barrier prediction parameters
     PHASE_HISTORY_LENGTH = 100
-    MIN_FRAMES_FOR_PREDICTION = 10
+    MIN_FRAMES_FOR_PREDICTION = 3
+    MAX_FRAMES_FOR_PREDICTION = 32
     MIN_HISTORY_FOR_PREDICTION = 50
+
+    # Kalman filter parameters
+
+    # Prediction parameters
+    PREDICTION_LATENCY = 0.05
+    EXTRAPOLATION_FACTOR = 1.5
 
 class Config:
     EMULATE_CAMERA = True  # Whether to use the camera emulator or real hardware
