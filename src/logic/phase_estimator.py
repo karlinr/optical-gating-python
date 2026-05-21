@@ -76,8 +76,7 @@ class SADEstimator(PhaseEstimator):
         self.barrier_phase = 2 * np.pi * (barrier_frame / self.reference_period)
         self._ready = True
 
-        self.frame_history = []
-        
+        self.frame_history = []        
         logger.info(f"SAD Model Built: Period={period:.2f}, Target Phase={self.target_phase:.2f}, Barrier Phase={self.barrier_phase:.2f}")
         return True
 
@@ -202,10 +201,11 @@ class SADEstimator(PhaseEstimator):
     def estimate(self, frame):
         """Estimates the phase and returns (phase, score)."""
         scores = sad_with_references(frame, self.reference_frames)
-        best_idx = np.argmin(scores[Config.Gating.NUM_EXTRA_REF_FRAMES : -Config.Gating.NUM_EXTRA_REF_FRAMES]) + Config.Gating.NUM_EXTRA_REF_FRAMES
+        best_idx = np.argmin(scores[Config.Gating.NUM_EXTRA_REF_FRAMES : -Config.Gating.NUM_EXTRA_REF_FRAMES])
         
         offset, score = v_fitting(scores[best_idx - 1], scores[best_idx], scores[best_idx + 1])
-        phase = ((best_idx + offset - Config.Gating.NUM_EXTRA_REF_FRAMES) / self.reference_period) * 2 * np.pi
+        
+        phase = ((best_idx + offset) / self.reference_period) * 2 * np.pi
 
         logger.debug(f"SAD Estimate: Best Index={best_idx}, Offset={offset:.2f}, Score={score:.2f}")
         
@@ -214,7 +214,9 @@ class SADEstimator(PhaseEstimator):
             "metrics": {
                 "sad_score": score,
                 "best_index": best_idx,
-                "offset": offset
+                "offset": offset,
+                "reference_period": self.reference_period,
+                "sad_curve": scores
             }
         }
     
@@ -285,7 +287,7 @@ class MLEEstimator(PhaseEstimator):
         scores = chi_sq(frame, self.binned_frames, self.noise_estimate)
         n_bins = len(scores)
         best_idx = np.argmin(scores)
-        score = scores[best_idx] / frame.size
+        reduced_chi_squared = scores[best_idx] / frame.size
 
         fit_points = Config.Gating.MLE_FIT_POINTS
         
@@ -297,22 +299,26 @@ class MLEEstimator(PhaseEstimator):
             coeffs = np.polyfit(x, y_fit, 2)
             a, b = coeffs[0], coeffs[1]
             
-            # The vertex of a parabola is at x = -b / 2a
-            vertex_offset = -b / (2 * a) if a != 0 else 0
+            vertex_offset = -b / (2 * a)
+            # Clamp the offset to the fitting window to prevent exploding phase values
+            vertex_offset = np.clip(vertex_offset, -fit_points, fit_points)
         except (np.linalg.LinAlgError, TypeError):
-            vertex_offset = 0
+            vertex_offset = 0.0
+            a = 1.0
             logger.warning("MLE parabola fitting failed. Defaulting vertex offset to 0.")
 
-        logger.debug(f"MLE Estimate: Best Bin={best_idx}, Offset={vertex_offset:.2f}, Score={score:.2f}")
+        logger.debug(f"MLE Estimate: Best Bin={best_idx}, Offset={vertex_offset:.2f}, Reduced Chi-Squared={reduced_chi_squared:.2f}")
 
         phase_radians = ((best_idx + vertex_offset + 0.5) % n_bins / n_bins) * 2 * np.pi
-        uncertainty_bins = np.sqrt(score / a)
-        uncertainty_radians = uncertainty_bins * (2 * np.pi / n_bins)
+        
+        # Uncertainty is the curvature of the fit
+        # For a parabola the curvature is given by 2 * a
+        uncertainty_radians = np.sqrt(2 / a) * (2 * np.pi / n_bins)
         
         return {
             "phase": phase_radians,
             "metrics": {
-                "reduced_chi_squared": score,
+                "reduced_chi_squared": reduced_chi_squared,
                 "uncertainty_estimate": uncertainty_radians,
                 "best_bin": best_idx,
                 "vertex_offset": vertex_offset

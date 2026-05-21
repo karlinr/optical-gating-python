@@ -1,9 +1,6 @@
 import sys
-from time import time
 from datetime import datetime
 from loguru import logger
-import zarr
-from ome_zarr.writer import write_image
 import tifffile as tf
 import os
 import numpy as np
@@ -71,7 +68,7 @@ def run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigg
     for i in range(iterations):
         # Grab latest brightfield frame, timestamp, and instant framerate
         frame, timestamp, framerate = controller.get_latest_bf_frame()
-        tf.imwrite(f"{storage_path}/brightfield/bf_frame_{timestamp}.tif", frame)
+        #tf.imwrite(f"{storage_path}/brightfield/bf_frame_{timestamp}.tif", frame)
 
         # Update our phase estimate based on the new frame
         phase_results = phase_manager.update(frame, timestamp=timestamp)
@@ -176,9 +173,11 @@ def plot_metrics(metrics):
     predicted_timestamps = [metrics["timestamps"][i] for i in range(len(metrics["predicted_lookaheads"])) if metrics["predicted_lookaheads"][i] is not None]
     plt.scatter(predicted_timestamps, np.array(predicted_timestamps) + np.array(predicted_times), label="Predicted Lookahead", color='orange')
     
-    """committed_times = [t[1] for t in metrics["committed_triggers"]]
+    # Plot commited timestamps and triggers
     committed_timestamps = [t[0] for t in metrics["committed_triggers"]]
-    plt.scatter(committed_timestamps, committed_times, label="Committed Trigger Times", color='red')"""
+    committed_targets = [t[1] for t in metrics["committed_triggers"]]
+    plt.scatter(committed_timestamps, committed_targets, label="Committed Trigger", color='red')
+    
     
     plt.xlabel("Time (s)")
     plt.ylabel("Time to Target (s)")
@@ -198,7 +197,7 @@ def main():
         phase_predictor = BarrierPredictor()
         trigger_controller = TriggerDecider()
         
-        run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, metrics, iterations=5000)
+        run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, metrics, iterations=3000)
 
         plot_metrics(metrics)
 

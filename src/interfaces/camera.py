@@ -42,6 +42,10 @@ class XimeaCamera:
             logger.info(f"Setting sensor taps for camera SN {self.serial_number} to {config.sensor_taps}.")
             self.cam.set_sensor_taps(config.sensor_taps)
 
+        """if config.downsample is not None:
+            logger.info(f"Setting downsampling for camera SN {self.serial_number} to {config.downsample}.")
+            self.cam.set_downsampling(config.downsample)"""
+
         logger.info(f"Setting camera SN {self.serial_number} exposure to {config.exposure_us} microseconds.")
         self.cam.set_exposure(config.exposure_us)
 
@@ -53,10 +57,6 @@ class XimeaCamera:
 
             timestamp = self.img_buffer.tsSec + self.img_buffer.tsUSec / 1e6
             frame_data = self.img_buffer.get_image_data_numpy()
-
-            if self.last_timestamp is not None:
-                logger.info(f"Framerate: {1/(timestamp - self.last_timestamp)} FPS")
-            self.last_timestamp = timestamp
 
             return frame_data, timestamp
         except xiapi.Xi_error as e:

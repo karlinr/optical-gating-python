@@ -19,7 +19,7 @@ class ExperimentConfig:
 
 # Timing box and pin mapping
 class TimingBox:
-    PORT = 'COM5'
+    PORT = 'COM3'
     EMULATOR_PORT = 'COM6'
     
     class Physical(IntEnum):
@@ -60,25 +60,25 @@ class Cameras:
     BF = CameraConfig(
         label="Brightfield camera",
         serial="28600723",
-        exposure_us=300,
+        exposure_us=2000,
         gain=0.0,
-        downsample=1,
+        downsample="XI_DWN_2x2",
         roi=(828, 418, 484, 488),
         trigger_pin=2, # Physical GPIO pin on the camera
         box_pins=[
             TimingBox.Logical.BF
             ],
         framerate=80,
-        sensor_taps = "XI_TAP_CNT_2"
+        sensor_taps = "XI_TAP_CNT_4"
     )
 
     # Fluorescence
     FL = CameraConfig(
             label="Fluorescence camera",
             serial="CEMAU2502004",
-            exposure_us=1000,
+            exposure_us=3000,
             gain=1.0,
-            downsample=1,
+            downsample=None,
             roi=None,
             trigger_pin=3, # Physical GPIO pin on the camera
             box_pins=[
@@ -94,7 +94,7 @@ class Gating:
     # Methods to estimate and predict phase
     # Options for PHASE_SOURCE: SAD or MLE
     # Options for PREDICTION_METHOD: BARRIER or KALMAN
-    PHASE_SOURCE = "SAD"
+    PHASE_SOURCE = "MLE"
     PREDICTION_METHOD = "BARRIER"
 
     # Whether we should log all phase estimates or just the PHASE_SOURCE one
@@ -120,13 +120,17 @@ class Gating:
     MIN_HISTORY_FOR_PREDICTION = 50
 
     # Kalman filter parameters
+    R = 0.01
+    Q = [[1, 0], [0, 1]]
+    P = [[1, 0], [0, 1]]
+    X0 = [0, 0]
 
     # Prediction parameters
     PREDICTION_LATENCY = 0.05
     EXTRAPOLATION_FACTOR = 1.5
 
 class Config:
-    EMULATE_CAMERA = True  # Whether to use the camera emulator or real hardware
+    EMULATE_CAMERA = False  # Whether to use the camera emulator or real hardware
 
     ExperimentConfig = ExperimentConfig
     TimingBox = TimingBox
