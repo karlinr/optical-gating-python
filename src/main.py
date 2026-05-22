@@ -1,7 +1,7 @@
 import sys
 from datetime import datetime
 from loguru import logger
-from app.data_manager import DataManager
+from app.data_manager import data_manager
 import os
 import numpy as np
 
@@ -26,15 +26,10 @@ def setup_hardware(controller):
     bf_test_frame, fl_test_frame = controller.connect_all()
     logger.info("All hardware components connected successfully.")
 
-    brightfield_chunk_size = (Config.ExperimentConfig.BRIGHTFIELD_CHUNK_SIZE, 1, 1, bf_test_frame.shape[0], bf_test_frame.shape[1])
-    fl_chunk_size = (Config.ExperimentConfig.FLUORESCENCE_CHUNK_SIZE, 1, 1, fl_test_frame.shape[0], fl_test_frame.shape[1])
-
-    logger.info(f"Brightfield camera frame shape: {bf_test_frame.shape}, chunk size: {brightfield_chunk_size}")
-    logger.info(f"Fluorescence camera frame shape: {fl_test_frame.shape}, chunk size: {fl_chunk_size}")
-
     controller.synchronise_camera()
     controller.setup_cameras_for_experiment()
     controller.setup_timing_box_for_experiment()
+
     logger.success("Hardware setup for experiment complete. Ready to run.")
 
     return bf_test_frame.shape, fl_test_frame.shape
@@ -52,24 +47,11 @@ def initialize_metrics():
         "committed_triggers": []  # List of tuples: (timestamp_issued, absolute_target_time)
     }
 
-def run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, data_manager, metrics, iterations):
-    # Run the acquisition loop for a fixed number of iterations
-    firing = False  
-    fire_timestamp = 0.0
-
-    # check if storage path exists and create if not
-    if not os.path.exists(f"{storage_path}/fluorescence"):
-        os.makedirs(f"{storage_path}/fluorescence")
-        logger.info(f"Created storage directory at {storage_path}/fluorescence")
-
-    if not os.path.exists(f"{storage_path}/brightfield"):
-        os.makedirs(f"{storage_path}/brightfield")
-        logger.info(f"Created storage directory at {storage_path}/brightfield")
-
+def run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, metrics, iterations):
     for i in range(iterations):
         # Grab latest brightfield frame, timestamp, and instant framerate
         frame, timestamp, framerate = controller.get_latest_bf_frame()
-        data_manager.write_brightfield_frame(frame, timestamp)
+        data_manager.save("brightfield", frame.copy(), chunk_size=Config.ExperimentConfig.BRIGHTFIELD_CHUNK_SIZE)
 
         # Update our phase estimate based on the new frame
         phase_results = phase_manager.update(frame, timestamp=timestamp)
@@ -92,8 +74,6 @@ def run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigg
             phase_predictor.update_phase(current_phase, timestamp)
             prediction_results = phase_predictor.predict_target_time(target_phase, barrier_phase, best_index, reference_period)
 
-
-
             if prediction_results is not None:
                 predicted_time_rel = prediction_results["predicted_time_rel"]
                 est_period = prediction_results["metrics"]["est_period"]
@@ -109,39 +89,35 @@ def run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigg
                     timestamp, absolute_predicted_time, est_period
                 )
 
-                if fire_signal and not firing:
+                if fire_signal:
                     exact_hardware_target = timestamp + relative_wait
                     logger.info(f"Scheduling fluorescence trigger at absolute time {exact_hardware_target}...")
                     
                     box_time, response = controller.trigger_fl_frame(exact_hardware_target)
                     if response == 1:
                         logger.success("Fluorescence trigger successfully committed to hardware.")
-                        firing = True
-                        fire_timestamp = exact_hardware_target
                         metrics["committed_triggers"].append((timestamp, exact_hardware_target))
+                        
+                        def async_fluorescence_save():
+                            try:
+                                fl_frame, fl_timestamp = controller.get_latest_fl_frame()
+                                data_manager.save("fluorescence", fl_frame, chunk_size=Config.ExperimentConfig.FLUORESCENCE_CHUNK_SIZE)
+                                logger.success(f"Asynchronously saved FL frame for target time {exact_hardware_target:.4f}")
+                            except Exception as e:
+                                logger.error(f"Background fluorescence pipeline failed: {e}")
+
+                        # Dispatch the combined pipeline function to the background threads
+                        data_manager.submit_task(async_fluorescence_save)
                     else:
                         # Handle hardware collision if the target deadline already expired
                         logger.error(f"Timing Box rejected trigger target {exact_hardware_target} (Already passed).")
                         trigger_controller.handle_hardware_rejection(timestamp, est_period)
-                        firing = False
             else:
                 metrics["est_periods"].append(None)
                 metrics["predicted_lookaheads"].append(None)
         else:
             metrics["est_periods"].append(None)
             metrics["predicted_lookaheads"].append(None)
-
-        # If a trigger was committed save the fluorescence frame once exposure completes
-        if firing:
-            if timestamp > fire_timestamp:
-                try:
-                    fl_frame, fl_timestamp = controller.get_latest_fl_frame()
-                    data_manager.write_fluorescence_frame(fl_frame, fl_timestamp)
-                    logger.success(f"Fluorescence frame captured and saved at timestamp {fl_timestamp}")
-                    firing = False
-                except Exception as e:
-                    logger.error(f"Failed to capture fluorescence frame: {e}")
-                    firing = False
 
 
 def plot_metrics(metrics):
@@ -193,13 +169,13 @@ def main():
         metrics = initialize_metrics()
         bf_shape, fl_shape = setup_hardware(controller)
 
-        with DataManager(storage_path, bf_shape, fl_shape) as data_manager:
+        data_manager.configure(storage_path)
 
-            phase_manager = PhaseManager()
-            phase_predictor = BarrierPredictor()
-            trigger_controller = TriggerDecider()
-            
-            run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, data_manager, metrics, iterations=3000)
+        phase_manager = PhaseManager()
+        phase_predictor = BarrierPredictor()
+        trigger_controller = TriggerDecider()
+        
+        run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, metrics, iterations=3000)
 
         plot_metrics(metrics)
 

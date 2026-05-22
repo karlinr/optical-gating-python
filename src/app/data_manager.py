@@ -1,55 +1,80 @@
+# src/app/data_manager.py
 import os
 import numpy as np
+import threading
 import tifffile as tiff
-from app.config import Config
+from concurrent.futures import ThreadPoolExecutor
+from loguru import logger
 
 class DataManager:
-    def __init__(self, storage_path, bf_shape=None, fl_shape=None):
+    def __init__(self):
+        self.storage_path = None
+        self._lock = threading.Lock()
+        self._writers = {}
+        self._counts = {}
+        
+        self._disk_pool = None
+        self._cam_pool = None
+
+    def configure(self, storage_path: str):
         self.storage_path = storage_path
-
-        # Create folders
-        self.bf_path = os.path.join(self.storage_path, "brightfield")
-        self.fl_path = os.path.join(self.storage_path, "fluorescence")
-        os.makedirs(self.bf_path, exist_ok=True)
-        os.makedirs(self.fl_path, exist_ok=True)
         
-        # Frame counters
-        self.bf_count = 0
-        self.fl_count = 0
+        self._disk_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="DiskIO")
+        self._cam_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="CamIO")
         
-        # Active file writing streams
-        self.bf_writer = None
-        self.fl_writer = None
+        logger.info(f"DataManager globally configured at: {storage_path}")
 
-    def __enter__(self):
-        return self
+    def save(self, stream_name: str, data: np.ndarray, chunk_size: int = None, is_float: bool = False):
+        if self._disk_pool is None:
+            raise RuntimeError("DataManager must be configured before calling save().")
+        
+        self._disk_pool.submit(self._execute_save, stream_name, data, chunk_size, is_float)
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.bf_writer:
-            self.bf_writer.close()
-        if self.fl_writer:
-            self.fl_writer.close()
+    def submit_task(self, func, *args, **kwargs):
+        if self._cam_pool is None:
+            raise RuntimeError("DataManager must be configured before submitting tasks.")
+        
+        self._cam_pool.submit(func, *args, **kwargs)
 
-    def write_brightfield_frame(self, frame, timestamp=None):
-        if self.bf_count % Config.ExperimentConfig.BRIGHTFIELD_CHUNK_SIZE == 0:
-            if self.bf_writer:
-                self.bf_writer.close()
-            chunk_idx = self.bf_count // Config.ExperimentConfig.BRIGHTFIELD_CHUNK_SIZE
-            
-            file_path = os.path.join(self.bf_path, f"bf_chunk_{chunk_idx:03d}.tif")
-            self.bf_writer = tiff.TiffWriter(file_path, bigtiff=True)
-            
-        self.bf_writer.write(frame.astype(np.uint16))
-        self.bf_count += 1
+    def _execute_save(self, stream_name: str, data: np.ndarray, chunk_size: int = None, is_float: bool = False):
+        dtype = np.float32 if is_float else np.uint16
+        
+        with self._lock:
+            if chunk_size is not None:
+                folder_path = os.path.join(self.storage_path, stream_name)
+                count = self._counts.get(stream_name, 0)
+                writer = self._writers.get(stream_name)
 
-    def write_fluorescence_frame(self, frame, timestamp=None):
-        if self.fl_count % Config.ExperimentConfig.FLUORESCENCE_CHUNK_SIZE == 0:
-            if self.fl_writer:
-                self.fl_writer.close()
-            chunk_idx = self.fl_count // Config.ExperimentConfig.FLUORESCENCE_CHUNK_SIZE
+                if count % chunk_size == 0:
+                    if writer:
+                        writer.close()
+                    os.makedirs(folder_path, exist_ok=True)
+                    chunk_idx = count // chunk_size
+                    file_path = os.path.join(folder_path, f"{stream_name}_chunk_{chunk_idx:03d}.tif")
+                    writer = tiff.TiffWriter(file_path, bigtiff=False)
+                    self._writers[stream_name] = writer
+
+                writer.write(data.astype(dtype), contiguous=True)
+                self._counts[stream_name] = count + 1
+            else:
+                os.makedirs(self.storage_path, exist_ok=True)
+                file_path = os.path.join(self.storage_path, f"{stream_name}.tif")
+                tiff.imwrite(file_path, data.astype(dtype))
+
+    def close(self):
+        logger.info("Flushing remaining image writes and shutting down DataManager thread pools...")
+        
+        if self._cam_pool:
+            self._cam_pool.shutdown(wait=True)
             
-            file_path = os.path.join(self.fl_path, f"fl_chunk_{chunk_idx:03d}.tif")
-            self.fl_writer = tiff.TiffWriter(file_path, bigtiff=True)
-            
-        self.fl_writer.write(frame.astype(np.uint16))
-        self.fl_count += 1
+        if self._disk_pool:
+            self._disk_pool.shutdown(wait=True)
+        
+        with self._lock:
+            for writer in self._writers.values():
+                if writer:
+                    writer.close()
+            self._writers.clear()
+        logger.success("DataManager cleanly closed.")
+
+data_manager = DataManager()

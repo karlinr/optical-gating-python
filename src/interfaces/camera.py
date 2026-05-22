@@ -11,8 +11,6 @@ class XimeaCamera:
         self.cam = xiapi.Camera()
         self.img_buffer = xiapi.Image()
 
-        self.last_timestamp = None
-
     def connect(self, config):
         self.serial_number = config.serial
         try:

@@ -18,8 +18,8 @@ class ExperimentConfig:
 
 # Timing box and pin mapping
 class TimingBox:
-    PORT = 'COM4'
-    EMULATOR_PORT = 'COM7'
+    PORT = 'COM3'
+    EMULATOR_PORT = 'COM4'
     
     class Physical(IntEnum):
         """Actual BNC ports on the Timing Box."""

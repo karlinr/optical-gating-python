@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 # Ensure we use the optimized utils
 from logic.utils import v_fitting, chi_sq, sad_with_references 
 from app.config import Config
+from app.data_manager import data_manager
 
 class PhaseEstimator(ABC):
     def __init__(self):
@@ -75,7 +76,10 @@ class SADEstimator(PhaseEstimator):
         self.barrier_phase = 2 * np.pi * (barrier_frame / self.reference_period)
         self._ready = True
 
-        self.frame_history = []        
+        self.frame_history = []
+
+        data_manager.save("reference_sequence", self.reference_frames.copy())
+
         logger.info(f"SAD Model Built: Period={period:.2f}, Target Phase={self.target_phase:.2f}, Barrier Phase={self.barrier_phase:.2f}")
         return True
 
@@ -277,6 +281,9 @@ class MLEEstimator(PhaseEstimator):
             self.noise_estimate[b][self.noise_estimate[b] < Config.Gating.MLE_MIN_NOISE] = Config.Gating.MLE_MIN_NOISE
 
         logger.info("MLE Estimator model built. Ready for estimation.")
+
+        data_manager.save("binned_frames", self.binned_frames.copy())
+        data_manager.save("noise_estimate", self.noise_estimate.copy())
      
         self._ready = True
         self.frame_history = []

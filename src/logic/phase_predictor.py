@@ -65,14 +65,9 @@ class BarrierPredictor(PhasePredictor):
         if slope <= 1e-6:
             return None
 
-        current_time = self.timestamp_history[-1]
-        fitted_current_unwrapped = slope * current_time + intercept
-        fitted_current_wrapped = fitted_current_unwrapped % (2 * np.pi)
-
+        fitted_current_wrapped = (slope * self.timestamp_history[-1] + intercept) % (2 * np.pi)
         phase_dist_to_target = (target_phase - fitted_current_wrapped) % (2 * np.pi)
-        target_unwrapped = fitted_current_unwrapped + phase_dist_to_target
-        
-        predicted_time = (target_unwrapped - fitted_current_unwrapped) / slope
+        predicted_time = phase_dist_to_target / slope
         est_heart_period_s = 2 * np.pi / slope
         
         return {
