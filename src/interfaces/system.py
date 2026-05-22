@@ -119,7 +119,7 @@ class SystemController:
         bf_timestamps = []
 
         while TimingBox.is_future_tick((fire_time + total_wait_time) & 0xFFFFFF, self.timing_box.get_current_time()):
-            time.sleep(0.1) # Small sleep to reduce CPU load
+            time.sleep(0.1)
 
         while len(bf_timestamps) < 2:
             frame, timestamp = self.bf_cam.get_latest_frame(timeout_ms = 2000)

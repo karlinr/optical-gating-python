@@ -1,7 +1,6 @@
 from enum import IntEnum
 from dataclasses import dataclass, field
 from typing import List, Tuple, Optional
-from ximea import xiapi
 from pathlib import Path
 
 class ExperimentConfig:
@@ -19,8 +18,8 @@ class ExperimentConfig:
 
 # Timing box and pin mapping
 class TimingBox:
-    PORT = 'COM3'
-    EMULATOR_PORT = 'COM6'
+    PORT = 'COM4'
+    EMULATOR_PORT = 'COM7'
     
     class Physical(IntEnum):
         """Actual BNC ports on the Timing Box."""
@@ -130,7 +129,7 @@ class Gating:
     EXTRAPOLATION_FACTOR = 1.5
 
 class Config:
-    EMULATE_CAMERA = False  # Whether to use the camera emulator or real hardware
+    EMULATE_CAMERA = True  # Whether to use the camera emulator or real hardware
 
     ExperimentConfig = ExperimentConfig
     TimingBox = TimingBox

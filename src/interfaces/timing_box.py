@@ -135,6 +135,7 @@ class TimingBox:
         """Schedules the sequence to run at a specific absolute tick count."""
 
         # NOTE: I need to check what the return is. Is it returning the scheduled time or the current time?
+        # NOTE: It returns the current time
 
         # Uses 3-byte time
         data = list(int(tick_timestamp & 0xFFFFFF).to_bytes(3, 'big'))

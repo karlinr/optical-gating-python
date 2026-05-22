@@ -1,7 +1,6 @@
 from loguru import logger
 import numpy as np
 from abc import ABC, abstractmethod
-from typing import Optional, Tuple, Dict, List, Any
 
 # Ensure we use the optimized utils
 from logic.utils import v_fitting, chi_sq, sad_with_references 
@@ -201,11 +200,11 @@ class SADEstimator(PhaseEstimator):
     def estimate(self, frame):
         """Estimates the phase and returns (phase, score)."""
         scores = sad_with_references(frame, self.reference_frames)
-        best_idx = np.argmin(scores[Config.Gating.NUM_EXTRA_REF_FRAMES : -Config.Gating.NUM_EXTRA_REF_FRAMES])
+        best_idx = np.argmin(scores[Config.Gating.NUM_EXTRA_REF_FRAMES : -Config.Gating.NUM_EXTRA_REF_FRAMES]) + Config.Gating.NUM_EXTRA_REF_FRAMES
         
         offset, score = v_fitting(scores[best_idx - 1], scores[best_idx], scores[best_idx + 1])
         
-        phase = ((best_idx + offset) / self.reference_period) * 2 * np.pi
+        phase = ((best_idx + offset - Config.Gating.NUM_EXTRA_REF_FRAMES) / self.reference_period) * 2 * np.pi
 
         logger.debug(f"SAD Estimate: Best Index={best_idx}, Offset={offset:.2f}, Score={score:.2f}")
         
@@ -213,7 +212,7 @@ class SADEstimator(PhaseEstimator):
             "phase": phase % (2 * np.pi),
             "metrics": {
                 "sad_score": score,
-                "best_index": best_idx,
+                "best_index": best_idx - Config.Gating.NUM_EXTRA_REF_FRAMES,
                 "offset": offset,
                 "reference_period": self.reference_period,
                 "sad_curve": scores

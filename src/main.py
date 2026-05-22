@@ -1,13 +1,12 @@
 import sys
 from datetime import datetime
 from loguru import logger
-import tifffile as tf
+from app.data_manager import DataManager
 import os
 import numpy as np
 
 from interfaces.system import SystemController
 from app.config import Config
-from app.state import AppState, ExperimentState
 
 from logic.phase_estimator import PhaseManager
 from logic.phase_predictor import BarrierPredictor, TriggerDecider
@@ -38,6 +37,8 @@ def setup_hardware(controller):
     controller.setup_timing_box_for_experiment()
     logger.success("Hardware setup for experiment complete. Ready to run.")
 
+    return bf_test_frame.shape, fl_test_frame.shape
+
 def initialize_metrics():
     """Initializes the structured session tracking metrics dictionary."""
     return {
@@ -51,7 +52,7 @@ def initialize_metrics():
         "committed_triggers": []  # List of tuples: (timestamp_issued, absolute_target_time)
     }
 
-def run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, metrics, iterations):
+def run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, data_manager, metrics, iterations):
     # Run the acquisition loop for a fixed number of iterations
     firing = False  
     fire_timestamp = 0.0
@@ -68,7 +69,7 @@ def run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigg
     for i in range(iterations):
         # Grab latest brightfield frame, timestamp, and instant framerate
         frame, timestamp, framerate = controller.get_latest_bf_frame()
-        #tf.imwrite(f"{storage_path}/brightfield/bf_frame_{timestamp}.tif", frame)
+        data_manager.write_brightfield_frame(frame, timestamp)
 
         # Update our phase estimate based on the new frame
         phase_results = phase_manager.update(frame, timestamp=timestamp)
@@ -135,7 +136,7 @@ def run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigg
             if timestamp > fire_timestamp:
                 try:
                     fl_frame, fl_timestamp = controller.get_latest_fl_frame()
-                    tf.imwrite(f"{storage_path}/fluorescence/fl_frame_{fl_timestamp}.tif", fl_frame)
+                    data_manager.write_fluorescence_frame(fl_frame, fl_timestamp)
                     logger.success(f"Fluorescence frame captured and saved at timestamp {fl_timestamp}")
                     firing = False
                 except Exception as e:
@@ -190,14 +191,15 @@ def plot_metrics(metrics):
 def main():
     with SystemController() as controller:
         metrics = initialize_metrics()
+        bf_shape, fl_shape = setup_hardware(controller)
 
-        setup_hardware(controller)
+        with DataManager(storage_path, bf_shape, fl_shape) as data_manager:
 
-        phase_manager = PhaseManager()
-        phase_predictor = BarrierPredictor()
-        trigger_controller = TriggerDecider()
-        
-        run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, metrics, iterations=3000)
+            phase_manager = PhaseManager()
+            phase_predictor = BarrierPredictor()
+            trigger_controller = TriggerDecider()
+            
+            run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, data_manager, metrics, iterations=3000)
 
         plot_metrics(metrics)
 
