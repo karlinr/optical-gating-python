@@ -67,7 +67,7 @@ class Cameras:
         box_pins=[
             TimingBox.Logical.BF
             ],
-        framerate=80,
+        framerate=400,
         sensor_taps = "XI_TAP_CNT_4"
     )
 
@@ -93,7 +93,7 @@ class Gating:
     # Methods to estimate and predict phase
     # Options for PHASE_SOURCE: SAD or MLE
     # Options for PREDICTION_METHOD: BARRIER or KALMAN
-    PHASE_SOURCE = "MLE"
+    PHASE_SOURCE = "SAD"
     PREDICTION_METHOD = "BARRIER"
 
     # Whether we should log all phase estimates or just the PHASE_SOURCE one

@@ -167,7 +167,6 @@ def plot_metrics(metrics):
 def main():
     with SystemController() as controller:
         metrics = initialize_metrics()
-        bf_shape, fl_shape = setup_hardware(controller)
 
         data_manager.configure(storage_path)
 

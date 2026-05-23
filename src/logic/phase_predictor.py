@@ -40,8 +40,6 @@ class BarrierPredictor(PhasePredictor):
             return None
 
         unwrapped_phases = np.unwrap(self.phase_history)
-        current_unwrapped = unwrapped_phases[-1]
-        current_wrapped = self.phase_history[-1]
 
         barrier_index = int(np.round((barrier_phase / (2 * np.pi)) * reference_period))
         
@@ -92,6 +90,22 @@ class BarrierPredictor(PhasePredictor):
             logger.debug(f"Linear regression aborted: Frame drop detected in history window.")
             return False
         return True
+    
+class KalmanPredictor(PhasePredictor):
+    def __init__(self):
+        # State vector: [phase, phase_velocity]
+        self.X = np.array(Config.Gating.X0, dtype=np.float32)
+        self.P = np.array(Config.Gating.P, dtype=np.float32)
+        self.R = np.array(Config.Gating.R, dtype=np.float32)
+        self.Q = np.array(Config.Gating.Q, dtype=np.float32)
+
+    def update_phase(self, current_phase, timestamp):
+        # Kalman filter update step would go here
+        pass
+
+    def predict_target_time(self, target_phase, **kwargs):
+        # Kalman filter prediction step would go here
+        pass
     
 class TriggerDecider:
     def __init__(self):
