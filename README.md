@@ -33,8 +33,7 @@ src/
 - Thread safe state manager for eventual future UI integration
 - Phase estimation using MLE method
 - Fluorescence camera triggering
-## Partially implemented
-- Phase prediction. Barrier prediction is working. Kalman prediction to be added.
+- Phase prediction utilising standard barrier prediction or a Kalman filter
 ## Not implemented
 - Drift correction
 - Stage controls
