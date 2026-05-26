@@ -9,7 +9,7 @@ from interfaces.system import SystemController
 from app.config import Config
 
 from logic.phase_estimator import PhaseManager
-from logic.phase_predictor import BarrierPredictor, TriggerDecider
+from logic.phase_predictor import BarrierPredictor, KalmanPredictor, TriggerDecider
 
 import matplotlib.pyplot as plt
 
@@ -71,8 +71,14 @@ def run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigg
             best_index = sad_metrics.get("best_index", 0)
             reference_period = sad_metrics.get("reference_period", 1)
             
-            phase_predictor.update_phase(current_phase, timestamp)
-            prediction_results = phase_predictor.predict_target_time(target_phase, barrier_phase, best_index, reference_period)
+            uncertainty_estimate = active.get("metrics", {}).get("uncertainty_estimate", None)
+            phase_predictor.update_phase(current_phase, timestamp, uncertainty_estimate=uncertainty_estimate)
+            prediction_results = phase_predictor.predict_target_time(
+                target_phase, 
+                barrier_phase=barrier_phase, 
+                best_index=best_index, 
+                reference_period=reference_period
+            )
 
             if prediction_results is not None:
                 predicted_time_rel = prediction_results["predicted_time_rel"]
@@ -167,14 +173,20 @@ def plot_metrics(metrics):
 def main():
     with SystemController() as controller:
         metrics = initialize_metrics()
+        setup_hardware(controller)
 
         data_manager.configure(storage_path)
 
         phase_manager = PhaseManager()
-        phase_predictor = BarrierPredictor()
+        if Config.Gating.PREDICTION_METHOD == "KALMAN":
+            phase_predictor = KalmanPredictor()
+        elif Config.Gating.PREDICTION_METHOD == "BARRIER":
+            phase_predictor = BarrierPredictor()
+        else:
+            raise ValueError(f"Unsupported prediction method: {Config.Gating.PREDICTION_METHOD}")
         trigger_controller = TriggerDecider()
         
-        run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, metrics, iterations=3000)
+        run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, metrics, iterations=5000)
 
         plot_metrics(metrics)
 
