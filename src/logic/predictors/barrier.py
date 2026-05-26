@@ -18,7 +18,7 @@ class BarrierPredictor(PhasePredictor):
             self.phase_history.pop(0)
             self.timestamp_history.pop(0)
             
-    def predict_target_time(self, target_phase, barrier_phase, best_index, reference_period):
+    def predict_target_time(self, target_phase, **kwargs):
         """
         Predicts the future timestamp of the target cardiac phase 
         using linear extrapolation on unwrapped phase data, using a clamped
@@ -28,6 +28,10 @@ class BarrierPredictor(PhasePredictor):
             return None
 
         unwrapped_phases = np.unwrap(self.phase_history)
+
+        barrier_phase = kwargs.get("barrier_phase")
+        best_index = kwargs.get("best_index")
+        reference_period = kwargs.get("reference_period")
 
         barrier_index = int(np.round((barrier_phase / (2 * np.pi)) * reference_period))
         

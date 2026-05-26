@@ -41,12 +41,11 @@ def initialize_metrics():
     return {
         "timestamps": [],
         "framerates": [],
-        "sad_phases": [],
-        "mle_phases": [],
+        "estimator_phases": {},
         "active_phases": [],
         "est_periods": [],
         "predicted_lookaheads": [],
-        "committed_triggers": []  # List of tuples: (timestamp_issued, absolute_target_time)
+        "committed_triggers": []
     }
 
 def run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, metrics, iterations):
@@ -61,27 +60,28 @@ def run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigg
 
         metrics["timestamps"].append(timestamp)
         metrics["framerates"].append(framerate)
-        metrics["sad_phases"].append(phase_results.get("SAD", {}).get("phase", None))
-        metrics["mle_phases"].append(phase_results.get("MLE", {}).get("phase", None))
         metrics["active_phases"].append(active.get("phase", None))
+
+        for name, res in phase_results.items():
+            if name != "ACTIVE":
+                if name not in metrics["estimator_phases"]:
+                    metrics["estimator_phases"][name] = []
+                metrics["estimator_phases"][name].append(res.get("phase") if res else None)
 
         if active.get("status") == "READY":
             current_phase = active["phase"]
             target_phase = active["target_phase"]
             barrier_phase = active["barrier_phase"]
             active_metrics = active.get("metrics", {})
-            best_index = active_metrics.get("best_index", 0)
-            reference_period = active_metrics.get("reference_period", 1)
 
-            logger.debug(f"Frame {i}: Current Phase={current_phase:.2f}, Target Phase={target_phase:.2f}, Barrier Phase={barrier_phase:.2f}, Best Index={best_index}, Reference Period={reference_period:.2f}")
+            logger.debug(f"Frame {i}: Current Phase={current_phase:.2f}, Target Phase={target_phase:.2f}, Barrier Phase={barrier_phase:.2f}")
             
-            uncertainty_estimate = active.get("metrics", {}).get("uncertainty_estimate", None)
-            phase_predictor.update_phase(current_phase, timestamp, uncertainty_estimate=uncertainty_estimate)
+            # Forward all estimator metrics dynamically to both predictor states
+            phase_predictor.update_phase(current_phase, timestamp, **active_metrics)
             prediction_results = phase_predictor.predict_target_time(
                 target_phase, 
                 barrier_phase=barrier_phase, 
-                best_index=best_index, 
-                reference_period=reference_period
+                **active_metrics
             )
 
             if prediction_results is not None:
@@ -140,8 +140,8 @@ def plot_metrics(metrics):
     plt.legend()
 
     plt.subplot(2, 2, 2)
-    plt.plot(metrics["timestamps"], metrics["sad_phases"], label="SAD Phase")
-    plt.plot(metrics["timestamps"], metrics["mle_phases"], label="MLE Phase")
+    for name, phases in metrics.get("estimator_phases", {}).items():
+        plt.plot(metrics["timestamps"], phases, label=f"{name} Phase")
     plt.plot(metrics["timestamps"], metrics["active_phases"], label="Active Phase")
     plt.xlabel("Time (s)")
     plt.ylabel("Phase (degrees)")

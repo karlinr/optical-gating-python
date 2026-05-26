@@ -36,7 +36,12 @@ class PhaseManager:
 
         # Construct the response dictionary
         response = {
-            name: outputs.get(name) or {"phase": None, "metrics": {}}
+            name: outputs.get(name) or {
+                "phase": None, 
+                "target_phase": None, 
+                "barrier_phase": None, 
+                "metrics": {}
+            }
             for name in Config.Gating.ENABLED_ESTIMATORS
         }
 

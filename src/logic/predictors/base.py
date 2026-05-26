@@ -11,7 +11,7 @@ def register_predictor(name):
 class PhasePredictor(ABC):
     """Base class for phase predictors."""
     @abstractmethod
-    def update_phase(self, current_phase, timestamp):
+    def update_phase(self, current_phase, timestamp, **kwargs):
         pass
 
     @abstractmethod

@@ -1,4 +1,3 @@
-from collections import deque
 from loguru import logger
 from app.config import Config
 
