@@ -17,6 +17,11 @@ class PhaseEstimator(ABC):
     def is_ready(self):
         return self._ready
 
+    @property
+    def active_dependencies(self):
+        """Returns the list of dependencies currently required by this estimator."""
+        return self.dependencies
+
     @abstractmethod
     def update(self, frame, **kwargs):
         """Processes a frame. Returns an estimation dict if ready, or None if initializing."""

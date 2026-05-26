@@ -9,7 +9,9 @@ from interfaces.system import SystemController
 from app.config import Config
 
 from logic.phase_estimator import PhaseManager
-from logic.phase_predictor import BarrierPredictor, KalmanPredictor, TriggerDecider
+from logic.predictors.base import predictor_registry
+from logic.estimators.base import estimator_registry
+from logic.trigger_decider import TriggerDecider
 
 import matplotlib.pyplot as plt
 
@@ -67,9 +69,11 @@ def run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigg
             current_phase = active["phase"]
             target_phase = active["target_phase"]
             barrier_phase = active["barrier_phase"]
-            sad_metrics = phase_results.get("SAD", {}).get("metrics", {})
-            best_index = sad_metrics.get("best_index", 0)
-            reference_period = sad_metrics.get("reference_period", 1)
+            active_metrics = active.get("metrics", {})
+            best_index = active_metrics.get("best_index", 0)
+            reference_period = active_metrics.get("reference_period", 1)
+
+            logger.debug(f"Frame {i}: Current Phase={current_phase:.2f}, Target Phase={target_phase:.2f}, Barrier Phase={barrier_phase:.2f}, Best Index={best_index}, Reference Period={reference_period:.2f}")
             
             uncertainty_estimate = active.get("metrics", {}).get("uncertainty_estimate", None)
             phase_predictor.update_phase(current_phase, timestamp, uncertainty_estimate=uncertainty_estimate)
@@ -177,20 +181,22 @@ def main():
 
         data_manager.configure(storage_path)
 
-        phase_manager = PhaseManager()
-        if Config.Gating.PREDICTION_METHOD == "KALMAN":
-            phase_predictor = KalmanPredictor()
-        elif Config.Gating.PREDICTION_METHOD == "BARRIER":
-            phase_predictor = BarrierPredictor()
-        else:
-            raise ValueError(f"Unsupported prediction method: {Config.Gating.PREDICTION_METHOD}")
-        trigger_controller = TriggerDecider()
-        
-        run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, metrics, iterations=5000)
+        try:
+            phase_manager = PhaseManager()
+            pred_method = Config.Gating.PREDICTION_METHOD
+            if pred_method in predictor_registry:
+                phase_predictor = predictor_registry[pred_method]()
+            else:
+                raise ValueError(f"Unsupported prediction method: {pred_method}")
+            
+            trigger_controller = TriggerDecider()
+            run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, metrics, iterations=5000)
 
-        plot_metrics(metrics)
+            plot_metrics(metrics)
 
-        logger.info("Acquisition loop finished. Rendering metrics...")
+            logger.info("Acquisition loop finished. Rendering metrics...")
+        finally:
+            data_manager.close()
 
 if __name__ == "__main__":
     main()
