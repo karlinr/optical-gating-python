@@ -7,9 +7,9 @@ class PhaseManager:
             name: cls() for name, cls in estimator_registry.items()
         }
 
-    def update(self, frame, timestamp) -> dict:
-        source = Config.Gating.PHASE_SOURCE.upper()
-        base_to_run = set(Config.Gating.ENABLED_ESTIMATORS) | {source}
+        self.source = Config.Gating.PHASE_SOURCE
+
+        base_to_run = set(Config.Gating.ENABLED_ESTIMATORS) | {self.source}
 
         # Resolve dependencies dynamically without hardcoding specific class logic
         resolved_to_run = set()
@@ -20,15 +20,17 @@ class PhaseManager:
                     resolved_to_run.add(dep)
 
         # Determine execution order based on dependency count
-        execution_order = sorted(
+        self.execution_order = sorted(
             resolved_to_run,
             key=lambda n: len(getattr(self.estimators[n], "dependencies", []))
         )
 
+
+    def update(self, frame, timestamp) -> dict:
         # Execute estimators sequentially and accumulate context
         context = {}
         outputs = {}
-        for name in execution_order:
+        for name in self.execution_order:
             res = self.estimators[name].update(frame, timestamp=timestamp, context=context)
             outputs[name] = res
             if res is not None:
@@ -45,12 +47,12 @@ class PhaseManager:
             for name in Config.Gating.ENABLED_ESTIMATORS
         }
 
-        active_estimator = self.estimators.get(source)
+        active_estimator = self.estimators.get(self.source)
         is_ready = active_estimator.is_ready() if active_estimator else False
-        active_output = outputs.get(source) if is_ready else {}
+        active_output = outputs.get(self.source) if is_ready else {}
 
         response["ACTIVE"] = {
-            "status": "READY" if is_ready else f"{source}_COLLECTING_FRAMES",
+            "status": "READY" if is_ready else f"{self.source}_COLLECTING_FRAMES",
             "phase": active_output.get("phase"),
             "target_phase": active_output.get("target_phase"),
             "barrier_phase": active_output.get("barrier_phase"),

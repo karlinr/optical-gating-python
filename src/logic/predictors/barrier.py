@@ -45,7 +45,7 @@ class BarrierPredictor(PhasePredictor):
         if not self._validate_timeline_continuity(n_points):
             return None
 
-        fit_times = np.array(self.timestamp_history[-n_points:])
+        fit_times = np.array(self.timestamp_history)[-n_points:]
         fit_phases = unwrapped_phases[-n_points:]
         
         slope, intercept = np.polyfit(fit_times, fit_phases, 1)
@@ -73,7 +73,7 @@ class BarrierPredictor(PhasePredictor):
         if n_points <= 1:
             return True
             
-        active_timestamps = np.array(self.timestamp_history[-n_points:])
+        active_timestamps = np.array(self.timestamp_history)[-n_points:]
         tsdiffs = active_timestamps[1:] - active_timestamps[:-1]
         
         if np.max(tsdiffs) > np.min(tsdiffs) * 2.5:
