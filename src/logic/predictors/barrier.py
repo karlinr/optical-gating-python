@@ -1,22 +1,20 @@
 import numpy as np
 from loguru import logger
-from app.config import Config
+from collections import deque
 
+from app.config import Config
 from logic.predictors.base import PhasePredictor, register_predictor
     
 
 @register_predictor("BARRIER")
 class BarrierPredictor(PhasePredictor):
     def __init__(self):
-        self.timestamp_history = []
-        self.phase_history = []
+        self.timestamp_history = deque(maxlen=Config.Gating.PHASE_HISTORY_LENGTH)
+        self.phase_history = deque(maxlen=Config.Gating.PHASE_HISTORY_LENGTH)
 
     def update_phase(self, current_phase, timestamp, **kwargs):
         self.phase_history.append(current_phase)
         self.timestamp_history.append(timestamp)
-        if len(self.phase_history) > Config.Gating.PHASE_HISTORY_LENGTH:
-            self.phase_history.pop(0)
-            self.timestamp_history.pop(0)
             
     def predict_target_time(self, target_phase, **kwargs):
         """
