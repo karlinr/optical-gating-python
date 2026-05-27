@@ -93,11 +93,11 @@ class Gating:
     # Methods to estimate and predict phase
     # Options for PHASE_SOURCE: SAD or MLE
     # Options for PREDICTION_METHOD: BARRIER or KALMAN
-    PHASE_SOURCE = "SAD"
+    PHASE_SOURCE = "MLE"
     PREDICTION_METHOD = "BARRIER"
 
     # Whether we should log all phase estimates or just the PHASE_SOURCE one
-    ENABLED_ESTIMATORS = ["SAD", "MLE"]
+    ENABLED_ESTIMATORS = ["MLE"]
 
     # SAD parameters
     NUM_EXTRA_REF_FRAMES = 2

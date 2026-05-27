@@ -21,7 +21,6 @@ class MLEEstimator(PhaseEstimator):
 
     def update(self, frame, **kwargs):
         if not self.is_ready():
-            phase = kwargs.get("phase")
             context = kwargs.get("context", {})
             sad_result = context.get("SAD")
             phase = sad_result.get("phase") if sad_result else None

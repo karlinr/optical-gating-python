@@ -1,5 +1,6 @@
 from app.config import Config
 from .estimators import estimator_registry
+from graphlib import TopologicalSorter
 
 class PhaseManager:
     def __init__(self):
@@ -19,11 +20,10 @@ class PhaseManager:
                 for dep in self.estimators[name].active_dependencies:
                     resolved_to_run.add(dep)
 
-        # Determine execution order based on dependency count
-        self.execution_order = sorted(
-            resolved_to_run,
-            key=lambda n: len(getattr(self.estimators[n], "dependencies", []))
-        )
+        # Determine execution order using topological sort based on dependencies
+        self.execution_order = list(TopologicalSorter({
+            name: set(self.estimators[name].active_dependencies) for name in resolved_to_run
+        }).static_order())
 
 
     def update(self, frame, timestamp) -> dict:

@@ -36,12 +36,11 @@ class DataManager:
         
         self._cam_pool.submit(func, *args, **kwargs)
 
-    def _execute_save(self, stream_name: str, data: np.ndarray, chunk_size: int = None, is_float: bool = False):
-        dtype = np.float32 if is_float else np.uint16
-        
-        with self._lock:
-            if chunk_size is not None:
-                folder_path = os.path.join(self.storage_path, stream_name)
+    def _execute_save(self, stream_name: str, data: np.ndarray, chunk_size: int = None):
+        if chunk_size is not None:
+            folder_path = os.path.join(self.storage_path, stream_name)
+            
+            with self._lock:
                 count = self._counts.get(stream_name, 0)
                 writer = self._writers.get(stream_name)
 
@@ -54,12 +53,14 @@ class DataManager:
                     writer = tiff.TiffWriter(file_path, bigtiff=False)
                     self._writers[stream_name] = writer
 
-                writer.write(data.astype(dtype), contiguous=True)
                 self._counts[stream_name] = count + 1
-            else:
-                os.makedirs(self.storage_path, exist_ok=True)
-                file_path = os.path.join(self.storage_path, f"{stream_name}.tif")
-                tiff.imwrite(file_path, data.astype(dtype))
+
+            writer.write(data, contiguous=True)
+            
+        else:
+            os.makedirs(self.storage_path, exist_ok=True)
+            file_path = os.path.join(self.storage_path, f"{stream_name}.tif")
+            tiff.imwrite(file_path, data)
 
     def close(self):
         logger.info("Flushing remaining image writes and shutting down DataManager thread pools...")
