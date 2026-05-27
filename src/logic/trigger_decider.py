@@ -48,4 +48,4 @@ class TriggerDecider:
             f"for the remaining cycle duration ({est_period:.4f}s)."
         )
         # Advance the trigger lockout to the future to block subsequent frames in this cycle
-        self.most_recent_trigger_time = current_time + (est_period * 0.5)
+        self.most_recent_trigger_time = current_time

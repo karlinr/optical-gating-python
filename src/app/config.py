@@ -48,7 +48,7 @@ class CameraConfig:
     serial: str
     exposure_us: int
     gain: float
-    downsample: int
+    downsample: str
     roi: Optional[Tuple[int, int, int, int]]
     trigger_pin: int  # GPIO pin on the camera
     framerate: Optional[int] = None
