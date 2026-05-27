@@ -118,7 +118,7 @@ class MLEEstimator(PhaseEstimator):
 
 
 
-        logger.info(f"MLE Estimate: Best Bin={best_idx}, Offset={vertex_offset:.2f}, Reduced Chi-Squared={reduced_chi_squared:.2f}")
+        logger.debug(f"MLE Estimate: Best Bin={best_idx}, Offset={vertex_offset:.2f}, Reduced Chi-Squared={reduced_chi_squared:.2f}")
 
         phase_radians = ((best_idx + vertex_offset + 0.5) % n_bins / n_bins) * 2 * np.pi
         

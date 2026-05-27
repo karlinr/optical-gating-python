@@ -99,7 +99,7 @@ class Gating:
     PREDICTION_METHOD = "KALMAN"
 
     # Whether we should log all phase estimates or just the PHASE_SOURCE one
-    ENABLED_ESTIMATORS = ["MLE"]
+    ENABLED_ESTIMATORS = ["SAD", "MLE"]
 
     # SAD parameters
     NUM_EXTRA_REF_FRAMES = 2
