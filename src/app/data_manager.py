@@ -36,7 +36,7 @@ class DataManager:
         
         self._cam_pool.submit(func, *args, **kwargs)
 
-    def _execute_save(self, stream_name: str, data: np.ndarray, chunk_size: int = None):
+    def _execute_save(self, stream_name: str, data: np.ndarray, chunk_size: int = None, is_float: bool = False):
         if chunk_size is not None:
             folder_path = os.path.join(self.storage_path, stream_name)
             
