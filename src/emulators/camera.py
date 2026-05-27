@@ -170,7 +170,7 @@ class CameraEmulator:
         pattern = 32768 + 25000 * np.cos(global_phase + self.pixel_offsets)
         
         # Generate 16-bit sensor background noise
-        noise = np.random.randint(200, 1000, (self.height, self.width), dtype=np.uint16)
+        noise = np.random.randint(2000, 8000, (self.height, self.width), dtype=np.uint16)
         
         # Clamp strictly to maximum 16-bit integer boundaries
         frame = np.clip(pattern + noise, 0, 65535).astype(np.uint16)

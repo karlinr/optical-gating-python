@@ -14,6 +14,8 @@ class ExperimentConfig:
     BRIGHTFIELD_CHUNK_SIZE = 100
     FLUORESCENCE_CHUNK_SIZE = 1
     NUM_THREADS = 6
+
+    # Logging settings
     LOGGING_LEVEL = "INFO"
 
 # Timing box and pin mapping
@@ -94,7 +96,7 @@ class Gating:
     # Options for PHASE_SOURCE: SAD or MLE
     # Options for PREDICTION_METHOD: BARRIER or KALMAN
     PHASE_SOURCE = "MLE"
-    PREDICTION_METHOD = "BARRIER"
+    PREDICTION_METHOD = "KALMAN"
 
     # Whether we should log all phase estimates or just the PHASE_SOURCE one
     ENABLED_ESTIMATORS = ["MLE"]
@@ -110,7 +112,7 @@ class Gating:
     MLE_BOOTSTRAP_FRAMES = 3000
     MLE_BINS = 40
     MLE_MIN_NOISE = 1
-    MLE_FIT_POINTS = 5
+    MLE_FIT_POINTS = 1
 
     # Barrier prediction parameters
     PHASE_HISTORY_LENGTH = 100

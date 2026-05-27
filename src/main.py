@@ -190,7 +190,7 @@ def main():
                 raise ValueError(f"Unsupported prediction method: {pred_method}")
             
             trigger_controller = TriggerDecider()
-            run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, metrics, iterations=5000)
+            run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, metrics, iterations=4000)
 
             plot_metrics(metrics)
 

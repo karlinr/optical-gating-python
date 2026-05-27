@@ -66,11 +66,11 @@ class MLEEstimator(PhaseEstimator):
 
             if len(masked_frames) > 1:
                 order = np.argsort(masked_phases)
-                sorted_frames = masked_frames[order]
+                sorted_frames = masked_frames[order].astype(np.float32)
                 diffs = np.diff(sorted_frames, axis=0)
                 self.noise_estimate[b] = np.sum(diffs ** 2, axis=0) / (2 * (len(masked_frames) - 1))
             else:
-                logger.warning(f"Bin {b} has only one frame. Setting noise estimate to default value.")
+                logger.warning(f"Bin {b} has only {len(masked_frames)} frame(s). Setting noise estimate to default value.")
                 self.noise_estimate[b] = np.ones(frame_shape, dtype=np.float32) * Config.Gating.MLE_MIN_NOISE
 
             # Set any zero noise estimates to a minimum value to avoid division issues
@@ -89,7 +89,6 @@ class MLEEstimator(PhaseEstimator):
         scores = chi_sq(frame, self.binned_frames, self.noise_estimate)
         n_bins = len(scores)
         best_idx = np.argmin(scores)
-        reduced_chi_squared = scores[best_idx] / frame.size
 
         fit_points = Config.Gating.MLE_FIT_POINTS
         
@@ -98,24 +97,34 @@ class MLEEstimator(PhaseEstimator):
         y_fit = np.take(scores, indices, mode='wrap')
 
         try:
-            coeffs = np.polyfit(x, y_fit, 2)
-            a, b = coeffs[0], coeffs[1]
+            a, b, c = np.polyfit(x, y_fit, 2)
             
             vertex_offset = -b / (2 * a)
             # Clamp the offset to the fitting window to prevent exploding phase values
             vertex_offset = np.clip(vertex_offset, -fit_points, fit_points)
+
+            minimized_score = a * (vertex_offset ** 2) + b * vertex_offset + c
+
+            if minimized_score < 0:
+                logger.warning(f"Minima is negative ({minimized_score:.2f}), setting to {scores[best_idx]:.2f}.")
+                minimized_score = scores[best_idx]
+
+            reduced_chi_squared = minimized_score / frame.size
         except (np.linalg.LinAlgError, TypeError):
             vertex_offset = 0.0
             a = 1.0
+            reduced_chi_squared = scores[best_idx] / frame.size
             logger.warning("MLE parabola fitting failed. Defaulting vertex offset to 0.")
 
-        logger.debug(f"MLE Estimate: Best Bin={best_idx}, Offset={vertex_offset:.2f}, Reduced Chi-Squared={reduced_chi_squared:.2f}")
+
+
+        logger.info(f"MLE Estimate: Best Bin={best_idx}, Offset={vertex_offset:.2f}, Reduced Chi-Squared={reduced_chi_squared:.2f}")
 
         phase_radians = ((best_idx + vertex_offset + 0.5) % n_bins / n_bins) * 2 * np.pi
         
         # Uncertainty is the curvature of the fit
         # For a parabola the curvature is given by 2 * a
-        uncertainty_radians = np.sqrt(2 / a) * (2 * np.pi / n_bins)
+        uncertainty_radians = np.sqrt(1 / a) * (2 * np.pi / n_bins)
         
         return {
             "phase": phase_radians,
