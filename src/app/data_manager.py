@@ -55,7 +55,7 @@ class DataManager:
 
                 self._counts[stream_name] = count + 1
 
-            writer.write(data, contiguous=True)
+                writer.write(data, contiguous=True)
             
         else:
             os.makedirs(self.storage_path, exist_ok=True)
