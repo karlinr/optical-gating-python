@@ -59,13 +59,13 @@ class KalmanPredictor(PhasePredictor):
 
     def predict_target_time(self, target_phase, **kwargs):
         # We need to predict the time until the target phase is reached, given the current state estimate
-        if self.X[1, 0] <= 1e-6 and "reference_period" in kwargs:
+        """if self.X[1, 0] <= 1e-6 and "reference_period" in kwargs:
             ref_period = kwargs["reference_period"]
             framerate = getattr(Config.Cameras.BF, "framerate", 80)
             if ref_period > 0 and framerate > 0:
                 est_period_s = ref_period / framerate
                 self.X[1, 0] = (2 * np.pi) / est_period_s
-                logger.info(f"Kalman phase velocity warm-started: {self.X[1, 0]:.4f} rad/s (Period: {est_period_s:.4f}s)")
+                logger.info(f"Kalman phase velocity warm-started: {self.X[1, 0]:.4f} rad/s (Period: {est_period_s:.4f}s)")"""
 
         current_phase_estimate = self.X[0, 0] % (2 * np.pi)
         phase_diff = (target_phase - current_phase_estimate) % (2 * np.pi)

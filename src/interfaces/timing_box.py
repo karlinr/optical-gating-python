@@ -59,7 +59,7 @@ class TimingBox:
         payload = bytearray([cmd_byte, *(data or [])])
         self.ser.write(payload)
         self.ser.flush()
-        logger.success(f"Sent {cmd_name}: {payload.hex()}")
+        logger.info(f"Sent {cmd_name}: {payload.hex()}")
 
     def map_pin(self, physical_pin, logical_pin, invert=False):
         """
@@ -144,7 +144,10 @@ class TimingBox:
         response = self.ser.read(4)
 
         if len(response) == 4:
-            logger.info(f"FIRE_AT response: {response[0]} (Clock: {int.from_bytes(response[1:4], 'big')})")
+            if response[0] == 0:
+                logger.warning(f"FIRE_AT command scheduled in the past. Current clock: {int.from_bytes(response[1:4], 'big')}")
+            else:
+                logger.success(f"FIRE_AT response: {response[0]} (Clock: {int.from_bytes(response[1:4], 'big')})")
             return int.from_bytes(response[1:4], 'big'), response[0]
         else:
             logger.error("Failed to receive FIRE_AT response")

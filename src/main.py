@@ -45,7 +45,10 @@ def initialize_metrics():
         "active_phases": [],
         "est_periods": [],
         "predicted_lookaheads": [],
-        "committed_triggers": []
+        "committed_triggers": [],
+        "reduced_chi_squares": [],
+        "kalman_phase_estimates": [],
+        "kalman_phase_velocities": [],
     }
 
 def run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, metrics, iterations):
@@ -61,6 +64,7 @@ def run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigg
         metrics["timestamps"].append(timestamp)
         metrics["framerates"].append(framerate)
         metrics["active_phases"].append(active.get("phase", None))
+        metrics["reduced_chi_squares"].append(active.get("metrics", {}).get("reduced_chi_squared", None))
 
         for name, res in phase_results.items():
             if name != "ACTIVE":
@@ -90,6 +94,9 @@ def run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigg
 
                 metrics["est_periods"].append(est_period)
                 metrics["predicted_lookaheads"].append(predicted_time_rel)
+                pred_metrics = prediction_results.get("metrics", {})
+                metrics["kalman_phase_estimates"].append(pred_metrics.get("phase_estimate", None))
+                metrics["kalman_phase_velocities"].append(pred_metrics.get("phase_velocity_estimate", None))
                 
                 # Translate the relative lookahead delay into an absolute timeline target
                 absolute_predicted_time = timestamp + predicted_time_rel
@@ -125,12 +132,25 @@ def run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigg
             else:
                 metrics["est_periods"].append(None)
                 metrics["predicted_lookaheads"].append(None)
+                metrics["kalman_phase_estimates"].append(None)
+                metrics["kalman_phase_velocities"].append(None)
         else:
             metrics["est_periods"].append(None)
             metrics["predicted_lookaheads"].append(None)
+            metrics["kalman_phase_estimates"].append(None)
+            metrics["kalman_phase_velocities"].append(None)
 
 
 def plot_metrics(metrics):
+    plt.figure(figsize=(8, 4))
+    plt.plot(metrics["timestamps"], metrics["reduced_chi_squares"], label="Active Phase Reduced Chi-Square", color='purple')
+    plt.xlabel("Time (s)")
+    plt.ylabel("Reduced $\chi^2$ Score")
+    plt.title("Active Estimator Model Fit Goodness (Reduced Chi-Square)")
+    plt.legend()
+    plt.savefig(os.path.join(storage_path, "reduced_chi_squared.png"))
+    plt.show()
+
     plt.figure(figsize=(12, 8))
     plt.subplot(2, 2, 1)
     plt.plot(metrics["timestamps"], metrics["framerates"], label="Framerate")
@@ -158,13 +178,12 @@ def plot_metrics(metrics):
     plt.subplot(2, 2, 4)
     predicted_times = [t for t in metrics["predicted_lookaheads"] if t is not None]
     predicted_timestamps = [metrics["timestamps"][i] for i in range(len(metrics["predicted_lookaheads"])) if metrics["predicted_lookaheads"][i] is not None]
-    plt.scatter(predicted_timestamps, np.array(predicted_timestamps) + np.array(predicted_times), label="Predicted Lookahead", color='orange')
+    plt.scatter(predicted_timestamps, np.array(predicted_timestamps) + np.array(predicted_times), label="Predicted Lookahead", color='orange', s=10)
     
-    # Plot commited timestamps and triggers
+    # Plot committed timestamps and triggers
     committed_timestamps = [t[0] for t in metrics["committed_triggers"]]
     committed_targets = [t[1] for t in metrics["committed_triggers"]]
-    plt.scatter(committed_timestamps, committed_targets, label="Committed Trigger", color='red')
-    
+    plt.scatter(committed_timestamps, committed_targets, label="Committed Trigger", color='red', marker='x', zorder=5)
     
     plt.xlabel("Time (s)")
     plt.ylabel("Time to Target (s)")
@@ -172,7 +191,33 @@ def plot_metrics(metrics):
     plt.legend()
 
     plt.tight_layout()
+    plt.savefig(os.path.join(storage_path, "acquisition_metrics.png"))
     plt.show()
+
+    if any(p is not None for p in metrics["kalman_phase_estimates"]):
+        plt.figure(figsize=(14, 5))
+        
+        plt.subplot(1, 2, 1)
+        plt.plot(metrics["timestamps"], metrics["active_phases"], label="Measurement Input (Phase)", color='gray', alpha=0.5)
+        plt.plot(metrics["timestamps"], metrics["kalman_phase_estimates"], label="Kalman Latent State ($X_0$)", color='darkblue', linestyle='--')
+        plt.xlabel("Time (s)")
+        plt.ylabel("Phase (radians)")
+        plt.title("Kalman Filter Hidden State Phase Tracking")
+        plt.grid(True, linestyle="--", alpha=0.5)
+        plt.legend()
+
+        plt.subplot(1, 2, 2)
+        plt.plot(metrics["timestamps"], metrics["kalman_phase_velocities"], label="Phase Frequency Velocity ($X_1$)", color='crimson')
+        plt.xlabel("Time (s)")
+        plt.ylabel("Velocity Frequency (rad/s)")
+        plt.title("Kalman Dynamic Phase Frequency Estimate")
+        plt.grid(True, linestyle="--", alpha=0.5)
+        plt.legend()
+
+        plt.tight_layout()
+        plt.savefig(os.path.join(storage_path, "kalman_telemetry.png"))
+        plt.show()
+
 
 def main():
     with SystemController() as controller:
@@ -190,7 +235,7 @@ def main():
                 raise ValueError(f"Unsupported prediction method: {pred_method}")
             
             trigger_controller = TriggerDecider()
-            run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, metrics, iterations=4000)
+            run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, metrics, iterations=5000)
 
             plot_metrics(metrics)
 
