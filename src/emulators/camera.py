@@ -6,6 +6,22 @@ import socket
 import json
 import numpy as np
 
+# ==============================================================================
+# EMULATOR CONFIGURATION SETTINGS
+# ==============================================================================
+# --- Mode Selector ---
+REPLAY_TIFF_FILE = True            # Set to True to replay a real TIFF file; False for synthetic mode
+
+# --- TIFF Replay Mode Settings ---
+TIFF_FILE_PATH = r"C:\Users\Karlin\Documents\PhD\optical-gating-python\data\test_data.tif"  # Path to your multi-frame TIFF stack file
+LOOP_TIFF = False                    # Loop back to frame 0 upon hitting the end of the stack
+
+# --- Synthetic Heart Generation Settings ---
+BASE_HEART_RATE_HZ = 2.0            # Baseline frequency of heart contraction (2.0 Hz = 120 BPM)
+HEART_RATE_MODULATION_AMP = 0.4     # Amplitude of frequency variation (oscillates +/- 0.4 Hz)
+HEART_RATE_MODULATION_FREQ = 0.05    # Frequency of modulation cycle in Hz (simulates sinus arrhythmia)
+# ==============================================================================
+
 class CameraEmulator:
     # Class-level shared socket resources to prevent Windows bind conflicts
     _shared_sock = None
@@ -14,9 +30,8 @@ class CameraEmulator:
     _worker_thread = None
 
     def __init__(self):
-        self.width = 32
-        self.height = 32
-
+        self.width = 10
+        self.height = 10
 
         self.serial_number = None
         self.is_running = False
@@ -28,6 +43,14 @@ class CameraEmulator:
         self._trigger_event = threading.Event() # Internal signal for a hardware trigger
 
         self.t0 = time.perf_counter()
+        
+        # Phase tracking variables for continuous, jump-free frequency changes
+        self.accumulated_phase = 0.0
+        self._last_phase_time = self.t0
+
+        # TIFF replay data structures
+        self.tiff_frames = None
+        self.current_frame_idx = 0
 
         # Pre-compute coordinates for frame generation
         self.x_coord = np.arange(self.width)
@@ -99,6 +122,45 @@ class CameraEmulator:
                 if states.get(str(self.trigger_pin), 0) == 1:
                     self._trigger_event.set()
 
+    def _load_tiff_file(self):
+        """Loads a multi-frame TIFF file into memory using PIL or fallback to tifffile."""
+        if not REPLAY_TIFF_FILE:
+            return
+        
+        logger.info(f"Camera SN {self.serial_number} - Pre-loading TIFF stack from: {TIFF_FILE_PATH}")
+        try:
+            # Try loading via PIL (Pillow) first as it is broadly accessible standard
+            from PIL import Image
+            img = Image.open(TIFF_FILE_PATH)
+            frames = []
+            try:
+                while True:
+                    frames.append(np.array(img))
+                    img.seek(img.tell() + 1)
+            except EOFError:
+                pass
+            
+            self.tiff_frames = frames
+            if len(self.tiff_frames) == 0:
+                raise ValueError("TIFF stack contains zero frames.")
+            
+            # Re-scale matrix properties to conform with physical file footprint
+            self.height, self.width = self.tiff_frames[0].shape
+            logger.success(f"Successfully loaded {len(self.tiff_frames)} frames via PIL. Resolution: {self.width}x{self.height}")
+            
+        except Exception as e_pil:
+            logger.warning(f"PIL parser failed ({e_pil}). Attempting fallback execution via 'tifffile'...")
+            try:
+                import tifffile
+                self.tiff_frames = tifffile.imread(TIFF_FILE_PATH)
+                if len(self.tiff_frames) == 0:
+                    raise ValueError("TIFF stack contains zero frames.")
+                self.height, self.width = self.tiff_frames[0].shape
+                logger.success(f"Successfully loaded {len(self.tiff_frames)} frames via tifffile. Resolution: {self.width}x{self.height}")
+            except Exception as e_tiff:
+                logger.error(f"Catastrophic File IO Failure: Unable to parse TIFF image stack via PIL or tifffile: {e_tiff}")
+                self.tiff_frames = None
+
     def set_config(self, config):
         pass
 
@@ -122,6 +184,14 @@ class CameraEmulator:
                 self.frame_queue.get_nowait()
             except queue.Empty:
                 break
+
+        # Reset time references to guarantee smooth sequence initialization
+        self._last_phase_time = time.perf_counter()
+        self.current_frame_idx = 0
+        
+        # Load the target stack image data into memory if enabled
+        if REPLAY_TIFF_FILE and self.tiff_frames is None:
+            self._load_tiff_file()
 
         self.is_running = True
         self._stop_event.clear()
@@ -160,20 +230,48 @@ class CameraEmulator:
                 next_frame_deadline += frame_interval
 
     def _push_frame(self):
-        """Generates a synthetic 16-bit 'heart' frame utilizing the full uint16 range."""
-        t = time.perf_counter() - self.t0
-        freq = 2
-        
-        global_phase = 2 * np.pi * freq * t
-        
-        # Vectorized 16-bit scaling: Midpoint baseline at 32,768 with a wave amplitude of 25,000
-        pattern = 32768 + 25000 * np.cos(global_phase + self.pixel_offsets)
-        
-        # Generate 16-bit sensor background noise
-        noise = np.random.randint(2000, 15000, (self.height, self.width), dtype=np.uint16)
-        
-        # Clamp strictly to maximum 16-bit integer boundaries
-        frame = np.clip(pattern + noise, 0, 65535).astype(np.uint16)
+        """Generates a synthetic 16-bit frame or streams the next recorded frame from a TIFF stack."""
+        now = time.perf_counter()
+        t = now - self.t0
+
+        if REPLAY_TIFF_FILE and self.tiff_frames is not None:
+            # --- MODE A: TIFF HARDWARE FILE REPLAY ---
+            num_frames = len(self.tiff_frames)
+            if self.current_frame_idx >= num_frames:
+                if LOOP_TIFF:
+                    self.current_frame_idx = 0
+                else:
+                    logger.warning(f"Camera SN {self.serial_number} - End of TIFF data reached. Frozen on final frame.")
+                    self.current_frame_idx = num_frames - 1
+            
+            frame = self.tiff_frames[self.current_frame_idx].astype(np.uint16)
+            
+            # Advance structural marker ready for next interval interval or hardware sync edge pulse
+            if LOOP_TIFF or self.current_frame_idx < num_frames - 1:
+                self.current_frame_idx = (self.current_frame_idx + 1) % num_frames
+        else:
+            # --- MODE B: SYNTHETIC MODEL WITH CONTINUOUS HEARTRATE DRIFT ---
+            dt = now - self._last_phase_time
+            self._last_phase_time = now
+
+            # Add a small amount of random jitter to the model pixel_offsets to simulate the model changing over time
+            self.pixel_offsets += np.random.uniform(-0.005, 0.005, self.pixel_offsets.shape).astype(np.float32)
+            self.pixel_offsets = np.mod(self.pixel_offsets, 2 * np.pi)
+
+            # Compute immediate localized target cardiac cycle frequency
+            freq = BASE_HEART_RATE_HZ + HEART_RATE_MODULATION_AMP * np.sin(2 * np.pi * HEART_RATE_MODULATION_FREQ * t)
+            
+            # Smoothly integrate state step changes via slice deltas to preserve continuous signal phase
+            self.accumulated_phase += 2 * np.pi * freq * dt
+            
+            # Vectorized 16-bit scaling: Midpoint baseline at 32,768 with a wave amplitude of 25,000
+            pattern = 32768 + 25000 * np.cos(self.accumulated_phase + self.pixel_offsets)
+            
+            # Generate 16-bit sensor background noise
+            noise = np.random.randint(2000, 15000, (self.height, self.width), dtype=np.uint16)
+            
+            # Clamp strictly to maximum 16-bit integer boundaries
+            frame = np.clip(pattern + noise, 0, 65535).astype(np.uint16)
 
         if self.frame_queue.full():
             try:

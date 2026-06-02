@@ -20,7 +20,7 @@ class ExperimentConfig:
 
 # Timing box and pin mapping
 class TimingBox:
-    PORT = 'COM3'
+    PORT = 'COM5'#'COM3'
     EMULATOR_PORT = 'COM6'
     
     class Physical(IntEnum):
@@ -95,7 +95,7 @@ class Gating:
     # Methods to estimate and predict phase
     # Options for PHASE_SOURCE: SAD or MLE
     # Options for PREDICTION_METHOD: BARRIER or KALMAN
-    PHASE_SOURCE = "SAD"
+    PHASE_SOURCE = "MLE"
     PREDICTION_METHOD = "KALMAN"
 
     # Whether we should log all phase estimates or just the PHASE_SOURCE one
@@ -109,8 +109,8 @@ class Gating:
     MIN_HEART_RATE_HZ = 0.5
 
     # MLE parameters
-    MLE_BOOTSTRAP_FRAMES = 500
-    MLE_BINS = 40
+    MLE_BOOTSTRAP_FRAMES = 1000
+    MLE_BINS = 46
     MLE_MIN_NOISE = 1
     MLE_FIT_POINTS = 1
 
@@ -129,7 +129,7 @@ class Gating:
     EXTRAPOLATION_FACTOR = 1.5
 
 class Config:
-    EMULATE_CAMERA = False  # Whether to use the camera emulator or real hardware
+    EMULATE_CAMERA = True  # Whether to use the camera emulator or real hardware
 
     ExperimentConfig = ExperimentConfig
     TimingBox = TimingBox

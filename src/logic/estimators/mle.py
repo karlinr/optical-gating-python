@@ -1,5 +1,7 @@
 from loguru import logger
 import numpy as np
+from tqdm import tqdm
+import time
 
 # Ensure we use the optimized utils
 from logic.estimators.base import register_estimator, PhaseEstimator
@@ -42,47 +44,37 @@ class MLEEstimator(PhaseEstimator):
         return None
 
     def build_model(self):
+        start_time = time.time()
+        logger.info("Bootstrapping MLE model with collected frames...")
+
         n_bins = Config.Gating.MLE_BINS
-        frames = np.stack([h[0] for h in self.frame_history])
-        phases = np.array([h[1] for h in self.frame_history])
+        f_per_bin = len(self.frame_history) // n_bins
 
-        bins = np.linspace(0, 2 * np.pi, n_bins + 1)
-        bin_indices = np.digitize(phases, bins) - 1
-        bin_indices[bin_indices == n_bins] = 0
+        # Sort by timestamp
+        self.frame_history.sort(key=lambda x: x[1])
+        clean_history = self.frame_history[:n_bins * f_per_bin]
+        
+        # Extract frames and reshape into: (n_bins, f_per_bin, *frame_shape)
+        raw_frames = np.array([h[0] for h in clean_history], dtype=np.float32)
+        block = raw_frames.reshape(n_bins, f_per_bin, *raw_frames.shape[1:])
+        
+        # Calculate means across the frames in each bin
+        self.binned_frames = np.mean(block, axis=1)
 
-        logger.info(f"Frame count per bin: \n{np.bincount(bin_indices, minlength=n_bins)}")
-
-        frame_shape = frames[0].shape
-        self.binned_frames = np.zeros((n_bins, *frame_shape), dtype=np.float32)
-        self.noise_estimate = np.zeros((n_bins, *frame_shape), dtype=np.float32)
-
-        for b in range(n_bins):
-            mask = (bin_indices == b)
-
-            masked_frames = frames[mask]
-            masked_phases = phases[mask]
-
-            self.binned_frames[b] = np.mean(masked_frames, axis=0) if np.any(mask) else np.zeros(frame_shape, dtype=np.float32)
-
-            if len(masked_frames) > 1:
-                order = np.argsort(masked_phases)
-                sorted_frames = masked_frames[order].astype(np.float32)
-                diffs = np.diff(sorted_frames, axis=0)
-                self.noise_estimate[b] = np.sum(diffs ** 2, axis=0) / (2 * (len(masked_frames) - 1))
-            else:
-                logger.warning(f"Bin {b} has only {len(masked_frames)} frame(s). Setting noise estimate to default value.")
-                self.noise_estimate[b] = np.ones(frame_shape, dtype=np.float32) * Config.Gating.MLE_MIN_NOISE
-
-            # Set any zero noise estimates to a minimum value to avoid division issues
-            self.noise_estimate[b][self.noise_estimate[b] < Config.Gating.MLE_MIN_NOISE] = Config.Gating.MLE_MIN_NOISE
-
-        logger.info("MLE Estimator model built. Ready for estimation.")
-
+        # Get sum of squared differences for noise estimation
+        sum_sq_diff = np.sum(np.diff(block, axis=1) ** 2, axis=1)
+        self.noise_estimate = np.maximum(
+            sum_sq_diff / (2 * (f_per_bin - 1)),
+            Config.Gating.MLE_MIN_NOISE
+        )
+        
+        # Clear memory-heavy frame history after building the model
         data_manager.save("binned_frames", self.binned_frames.copy())
         data_manager.save("noise_estimate", self.noise_estimate.copy())
-     
         self._ready = True
         self.frame_history = []
+
+        logger.info(f"MLE model built in {time.time() - start_time:.2f} seconds with {len(clean_history)} frames.")
 
     def estimate(self, frame):
         # Calculate chi-squared scores
@@ -135,7 +127,8 @@ class MLEEstimator(PhaseEstimator):
                 "uncertainty_estimate": uncertainty_radians,
                 "best_index": best_idx,
                 "reference_period": n_bins,
-                "vertex_offset": vertex_offset
+                "vertex_offset": vertex_offset,
+                "mle_curve": scores
             }
         }
     
