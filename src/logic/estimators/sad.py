@@ -213,6 +213,6 @@ class SADEstimator(PhaseEstimator):
                 "best_index": best_idx - Config.Gating.NUM_EXTRA_REF_FRAMES,
                 "offset": offset,
                 "reference_period": self.reference_period,
-                "sad_curve": scores
+                "scores": scores
             }
         }

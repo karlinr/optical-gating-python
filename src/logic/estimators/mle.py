@@ -128,7 +128,7 @@ class MLEEstimator(PhaseEstimator):
                 "best_index": best_idx,
                 "reference_period": n_bins,
                 "vertex_offset": vertex_offset,
-                "mle_curve": scores
+                "scores": scores
             }
         }
     
