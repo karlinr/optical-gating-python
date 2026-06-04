@@ -74,7 +74,7 @@ class KalmanPredictor(PhasePredictor):
         phase_diff = (target_phase - current_phase_estimate) % (2 * np.pi)
         
         if self.X[1, 0] <= 1e-6:
-            return None
+            return None, {}
             
         time_to_target = phase_diff / self.X[1, 0]
         est_heart_period_s = 2 * np.pi / self.X[1, 0]

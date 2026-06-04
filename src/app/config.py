@@ -122,7 +122,7 @@ class Gating:
 
     # Kalman filter parameters
     KALMAN_MEASUREMENT_NOISE = 0.0001
-    KALMAN_PROCESS_NOISE = 10
+    KALMAN_PROCESS_NOISE = 0.0001
 
     # Prediction parameters
     PREDICTION_LATENCY = 0.05
