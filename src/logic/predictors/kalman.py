@@ -7,7 +7,10 @@ from logic.predictors.base import PhasePredictor, register_predictor
 @register_predictor("KALMAN")
 class KalmanPredictor(PhasePredictor):
     def __init__(self):
-        self.X = np.zeros((2, 1))
+        # Set velocity to 2 hz as a default and also consider framerate
+        initial_velocity = 2 * np.pi
+        self.X = np.zeros([2, 1], dtype=float)
+        self.X[1, 0] = initial_velocity
         self.P = np.array([[1, 0], [0, 1]])
         self.R = np.array([Config.Gating.KALMAN_MEASUREMENT_NOISE])
         self.H = np.array([[1, 0]])
@@ -76,11 +79,10 @@ class KalmanPredictor(PhasePredictor):
         time_to_target = phase_diff / self.X[1, 0]
         est_heart_period_s = 2 * np.pi / self.X[1, 0]
         
-        return {
-            "predicted_time_rel": time_to_target,
-            "metrics": {
-                "est_period": est_heart_period_s,
-                "phase_estimate": current_phase_estimate,
-                "phase_velocity_estimate": self.X[1, 0]
-            }
+        metadata = {
+            "est_period": est_heart_period_s,
+            "phase_estimate": current_phase_estimate,
+            "phase_velocity_estimate": self.X[1, 0]
         }
+
+        return time_to_target, metadata

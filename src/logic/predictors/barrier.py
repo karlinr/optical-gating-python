@@ -58,16 +58,15 @@ class BarrierPredictor(PhasePredictor):
         predicted_time = phase_dist_to_target / slope
         est_heart_period_s = 2 * np.pi / slope
         
-        return {
-            "predicted_time_rel": predicted_time,
-            "metrics": {
-                "est_period": est_heart_period_s,
-                "n_points": n_points,
-                "slope": slope,
-                "intercept": intercept
-            }
+        metadata = {
+            "est_period": est_heart_period_s,
+            "n_points": n_points,
+            "slope": slope,
+            "intercept": intercept
         }
 
+        return predicted_time, metadata
+    
     def _validate_timeline_continuity(self, n_points: int):
         """Internal helper to ensure no frame drops occurred in the fitting window."""
         if n_points <= 1:

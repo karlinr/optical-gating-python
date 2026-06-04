@@ -284,9 +284,15 @@ class CameraEmulator:
     def get_latest_frame(self, timeout_ms=1000):
         try:
             logger.debug(f"Camera SN {self.serial_number} - Waiting for frame. Current queue size: {self.frame_queue.qsize()}. Timeout: {timeout_ms} ms.")
-            return self.frame_queue.get(timeout=timeout_ms/1000.0)
+            frame, t = self.frame_queue.get(timeout=timeout_ms / 1000.0)
+            metadata = {
+                "true_phase": self.accumulated_phase % (2 * np.pi),
+                "frame_idx": self.current_frame_idx,
+                "is_synthetic": self.tiff_frames is None
+            }
+            return frame, t, metadata
         except queue.Empty:
-            return None, None
+            return None, None, {}
 
     def stop_acquisition(self):
         self.is_running = False

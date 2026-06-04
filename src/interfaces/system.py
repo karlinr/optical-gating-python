@@ -70,8 +70,8 @@ class SystemController:
             fl_frame = None
             while bf_frame is None or fl_frame is None:
                 time.sleep(0.1) # Small sleep to reduce CPU load
-                bf_frame, bf_timestamp = self.bf_cam.get_latest_frame(timeout_ms = 5000)
-                fl_frame, fl_timestamp = self.fl_cam.get_latest_frame(timeout_ms = 5000)
+                bf_frame, bf_timestamp, bf_metadata = self.bf_cam.get_latest_frame(timeout_ms = 5000)
+                fl_frame, fl_timestamp, fl_metadata = self.fl_cam.get_latest_frame(timeout_ms = 5000)
                 logger.info(f"Connection test: BF frame received: {bf_frame is not None}, FL frame received: {fl_frame is not None}")
 
         logger.info("Successfully connected to timing box and cameras.")
@@ -122,7 +122,7 @@ class SystemController:
             time.sleep(0.1)
 
         while len(bf_timestamps) < 2:
-            frame, timestamp = self.bf_cam.get_latest_frame(timeout_ms = 2000)
+            frame, timestamp, metadata = self.bf_cam.get_latest_frame(timeout_ms = 2000)
             if timestamp is not None:
                 bf_timestamps.append(timestamp)
 
@@ -185,7 +185,7 @@ class SystemController:
         Retrieves the latest frame and timestamp from the brightfield camera.
         """
         
-        frame, timestamp = self.bf_cam.get_latest_frame()
+        frame, timestamp, metadata = self.bf_cam.get_latest_frame()
 
         logger.debug(f"Framerate: {1 / (timestamp - self.last_timestamp)}, Timestamp: {timestamp}")
 
@@ -193,16 +193,18 @@ class SystemController:
 
         self.last_timestamp = timestamp
 
+        metadata["framerate"] = framerate
 
-        return frame, timestamp, framerate
+
+        return frame, timestamp, metadata
     
     def get_latest_fl_frame(self):
         """
         Retrieves the latest frame and timestamp from the fluorescence camera.
         """
         try:
-            frame, timestamp = self.fl_cam.get_latest_frame()
-            return frame, timestamp
+            frame, timestamp, metadata = self.fl_cam.get_latest_frame()
+            return frame, timestamp, metadata
         except Exception as e:
             logger.error(f"Error getting frame from fluorescence camera: {e}")
             raise

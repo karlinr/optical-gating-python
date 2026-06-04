@@ -16,7 +16,6 @@ from logic.trigger_decider import TriggerDecider
 import matplotlib.pyplot as plt
 
 storage_path = Config.ExperimentConfig.EXPERIMENT_DATA_PATH
-# Add timestamp to storage path for this run using time
 timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
 storage_path = f"{storage_path}/run_{timestamp_str}"
 
@@ -33,7 +32,6 @@ def setup_hardware(controller):
     controller.setup_timing_box_for_experiment()
 
     logger.success("Hardware setup for experiment complete. Ready to run.")
-
     return bf_test_frame.shape, fl_test_frame.shape
 
 def initialize_metrics():
@@ -41,37 +39,24 @@ def initialize_metrics():
     return {
         "timestamps": [],
         "framerates": [],
-        "estimator_phases": {},
-        "active_phases": [],
-        "est_periods": [],
-        "predicted_lookaheads": [],
+        "phase_results": [],
+        "prediction_results": [],
         "committed_triggers": [],
-        "reduced_chi_squares": [],
-        "kalman_phase_estimates": [],
-        "kalman_phase_velocities": [],
     }
 
 def run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, metrics, iterations):
     for i in range(iterations):
-        # Grab latest brightfield frame, timestamp, and instant framerate
-        frame, timestamp, framerate = controller.get_latest_bf_frame()
+        frame, timestamp, metadata = controller.get_latest_bf_frame()
         data_manager.save("brightfield", frame.copy(), chunk_size=Config.ExperimentConfig.BRIGHTFIELD_CHUNK_SIZE)
 
-        # Update our phase estimate based on the new frame
         phase_results = phase_manager.update(frame, timestamp=timestamp)
         active = phase_results.get("ACTIVE", {})
 
         metrics["timestamps"].append(timestamp)
-        metrics["framerates"].append(framerate)
-        metrics["active_phases"].append(active.get("phase", None))
-        metrics["reduced_chi_squares"].append(active.get("metrics", {}).get("reduced_chi_squared", None))
+        metrics["framerates"].append(metadata.get("framerate"))
+        metrics["phase_results"].append(phase_results)
 
-        for name, res in phase_results.items():
-            if name != "ACTIVE":
-                if name not in metrics["estimator_phases"]:
-                    metrics["estimator_phases"][name] = []
-                metrics["estimator_phases"][name].append(res.get("phase") if res else None)
-
+        predicted_time_rel = None
         if active.get("status") == "READY":
             current_phase = active["phase"]
             target_phase = active["target_phase"]
@@ -80,31 +65,14 @@ def run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigg
 
             logger.debug(f"Frame {i}: Current Phase={current_phase:.2f}, Target Phase={target_phase:.2f}, Barrier Phase={barrier_phase:.2f}")
             
-            # Forward all estimator metrics dynamically to both predictor states
             phase_predictor.update_phase(current_phase, timestamp, **active_metrics)
-            prediction_results = phase_predictor.predict_target_time(
-                target_phase, 
-                barrier_phase=barrier_phase, 
-                **active_metrics
-            )
+            predicted_time_rel, pred_metadata = phase_predictor.predict_target_time(target_phase, barrier_phase=barrier_phase, **active_metrics)
 
-            if prediction_results is not None:
-                predicted_time_rel = prediction_results["predicted_time_rel"]
-                est_period = prediction_results["metrics"]["est_period"]
-
-                metrics["est_periods"].append(est_period)
-                metrics["predicted_lookaheads"].append(predicted_time_rel)
-                pred_metrics = prediction_results.get("metrics", {})
-                metrics["kalman_phase_estimates"].append(pred_metrics.get("phase_estimate", None))
-                metrics["kalman_phase_velocities"].append(pred_metrics.get("phase_velocity_estimate", None))
-                
-                # Translate the relative lookahead delay into an absolute timeline target
+            if predicted_time_rel is not None:
+                est_period = pred_metadata["est_period"]
                 absolute_predicted_time = timestamp + predicted_time_rel
 
-                # Evaluate tracking thresholds and check half-cycle lockout guards
-                fire_signal, relative_wait = trigger_controller.evaluate_trigger(
-                    timestamp, absolute_predicted_time, est_period
-                )
+                fire_signal, relative_wait = trigger_controller.evaluate_trigger(timestamp, absolute_predicted_time, est_period)
 
                 if fire_signal:
                     exact_hardware_target = timestamp + relative_wait
@@ -117,113 +85,83 @@ def run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigg
                         
                         def async_fluorescence_save(target = exact_hardware_target):
                             try:
-                                fl_frame, fl_timestamp = controller.get_latest_fl_frame()
+                                fl_frame, fl_timestamp, fl_metadata = controller.get_latest_fl_frame()
                                 data_manager.save("fluorescence", fl_frame, chunk_size=Config.ExperimentConfig.FLUORESCENCE_CHUNK_SIZE)
                                 logger.success(f"Asynchronously saved FL frame for target time {target:.4f}")
                             except Exception as e:
                                 logger.error(f"Background fluorescence pipeline failed: {e}")
 
-                        # Dispatch the combined pipeline function to the background threads
                         data_manager.submit_task(async_fluorescence_save)
                     else:
-                        # Handle hardware collision if the target deadline already expired
                         logger.error(f"Timing Box rejected trigger target {exact_hardware_target} (Already passed).")
                         trigger_controller.handle_hardware_rejection(timestamp, est_period)
-            else:
-                metrics["est_periods"].append(None)
-                metrics["predicted_lookaheads"].append(None)
-                metrics["kalman_phase_estimates"].append(None)
-                metrics["kalman_phase_velocities"].append(None)
+                        
+        if predicted_time_rel is not None:
+            metrics["prediction_results"].append((predicted_time_rel, pred_metadata))
         else:
-            metrics["est_periods"].append(None)
-            metrics["predicted_lookaheads"].append(None)
-            metrics["kalman_phase_estimates"].append(None)
-            metrics["kalman_phase_velocities"].append(None)
+            metrics["prediction_results"].append(None)
 
 
 def plot_metrics(metrics):
-    plt.figure(figsize=(8, 4))
-    plt.plot(metrics["timestamps"], metrics["reduced_chi_squares"], label="Active Phase Reduced Chi-Square", color='purple')
-    plt.xlabel("Time (s)")
-    plt.ylabel("Reduced $\chi^2$ Score")
-    plt.title("Active Estimator Model Fit Goodness (Reduced Chi-Square)")
-    plt.legend()
-    plt.savefig(os.path.join(storage_path, "reduced_chi_squared.png"))
-    plt.show()
-
-    plt.figure(figsize=(12, 8))
-    plt.subplot(2, 2, 1)
-    plt.plot(metrics["timestamps"], metrics["framerates"], label="Framerate")
-    plt.xlabel("Time (s)")
-    plt.ylabel("Framerate (fps)")
-    plt.title("Camera Framerate Over Time")
-    plt.legend()
-
-    plt.subplot(2, 2, 2)
-    for name, phases in metrics.get("estimator_phases", {}).items():
-        plt.plot(metrics["timestamps"], phases, label=f"{name} Phase")
-    plt.plot(metrics["timestamps"], metrics["active_phases"], label="Active Phase")
-    plt.xlabel("Time (s)")
-    plt.ylabel("Phase (degrees)")
-    plt.title("Phase Estimates Over Time")
-    plt.legend()
-
-    plt.subplot(2, 2, 3)
-    plt.plot(metrics["timestamps"], metrics["est_periods"], label="Estimated Period")
-    plt.xlabel("Time (s)")
-    plt.ylabel("Period (s)")
-    plt.title("Estimated Cardiac Period Over Time")
-    plt.legend()
-
-    plt.subplot(2, 2, 4)
-    predicted_times = [t for t in metrics["predicted_lookaheads"] if t is not None]
-    predicted_timestamps = [metrics["timestamps"][i] for i in range(len(metrics["predicted_lookaheads"])) if metrics["predicted_lookaheads"][i] is not None]
-    plt.scatter(predicted_timestamps, np.array(predicted_timestamps) + np.array(predicted_times), label="Predicted Lookahead", color='orange', s=10)
+    timestamps = metrics["timestamps"]
     
-    # Plot committed timestamps and triggers
-    committed_timestamps = [t[0] for t in metrics["committed_triggers"]]
-    committed_targets = [t[1] for t in metrics["committed_triggers"]]
-    plt.scatter(committed_timestamps, committed_targets, label="Committed Trigger", color='red', marker='x', zorder=5)
+    chi_squares = [r.get("ACTIVE", {}).get("metrics", {}).get("reduced_chi_squared") for r in metrics["phase_results"]]
+    active_phases = [r.get("ACTIVE", {}).get("phase") for r in metrics["phase_results"]]
+    periods = [p[1]["est_period"] if p else None for p in metrics["prediction_results"]]
+    lookaheads = [p[0] if p else None for p in metrics["prediction_results"]]
+    k_phases = [p[1].get("phase_estimate") if p else None for p in metrics["prediction_results"]]
+    k_velocities = [p[1].get("phase_velocity_estimate") if p else None for p in metrics["prediction_results"]]
+
+    fig, axs = plt.subplots(3, 2, figsize=(14, 10), sharex=True)
     
-    plt.xlabel("Time (s)")
-    plt.ylabel("Time to Target (s)")
-    plt.title("Predicted Lookahead and Committed Trigger Times")
-    plt.legend()
+    axs[0, 0].plot(timestamps, metrics["framerates"], color='tab:blue')
+    axs[0, 0].set_title("Camera Framerate (fps)")
+    
+    axs[0, 1].plot(timestamps, chi_squares, color="purple")
+    axs[0, 1].set_title("Model Fit Goodness (Reduced $\chi^2$)")
+
+    est_names = set(n for r in metrics["phase_results"] for n in r if n != "ACTIVE")
+    for name in est_names:
+        phases = [r.get(name, {}).get("phase") for r in metrics["phase_results"]]
+        axs[1, 0].plot(timestamps, phases, label=f"{name} Estimate", alpha=0.4, linestyle=":")
+    axs[1, 0].plot(timestamps, active_phases, label="Active Phase", color="black", lw=1.5)
+    if any(p is not None for p in k_phases):
+        axs[1, 0].plot(timestamps, k_phases, label="Kalman Phase ($X_0$)", color="darkblue", linestyle='--')
+    axs[1, 0].set_title("Phase Estimates Over Time")
+
+    if any(p is not None for p in k_velocities):
+        axs[1, 1].plot(timestamps, k_velocities, color="crimson")
+    axs[1, 1].set_title("Kalman Phase Velocity ($X_1$)")
+
+    axs[2, 0].plot(timestamps, periods, color="tab:green")
+    axs[2, 0].set_title("Estimated Cardiac Period (s)")
+
+    pred_pts = [(t, t + l) for t, l in zip(timestamps, lookaheads) if l is not None]
+    if pred_pts:
+        px, py = zip(*pred_pts)
+        axs[2, 1].scatter(px, py, label="Predicted Target Time", color="orange", s = 1)
+    if metrics["committed_triggers"]:
+        tx, ty = zip(*metrics["committed_triggers"])
+        axs[2, 1].scatter(tx, ty, label="Trigger", color="red", marker="x")
+    axs[2, 1].set_title("Gated Lookahead and Hardware Trigger Commitments")
+
+    for ax in axs.flat:
+        ax.grid(True, linestyle="--", alpha=0.4)
+        if ax.get_legend_handles_labels()[0]:
+            ax.legend(loc="upper right", fontsize='small')
+            
+    axs[2, 0].set_xlabel("Time (s)")
+    axs[2, 1].set_xlabel("Time (s)")
 
     plt.tight_layout()
     plt.savefig(os.path.join(storage_path, "acquisition_metrics.png"))
     plt.show()
-
-    if any(p is not None for p in metrics["kalman_phase_estimates"]):
-        plt.figure(figsize=(14, 5))
-        
-        plt.subplot(1, 2, 1)
-        plt.plot(metrics["timestamps"], metrics["active_phases"], label="Measurement Input (Phase)", color='gray', alpha=0.5)
-        plt.plot(metrics["timestamps"], metrics["kalman_phase_estimates"], label="Kalman Latent State ($X_0$)", color='darkblue', linestyle='--')
-        plt.xlabel("Time (s)")
-        plt.ylabel("Phase (radians)")
-        plt.title("Kalman Filter Hidden State Phase Tracking")
-        plt.grid(True, linestyle="--", alpha=0.5)
-        plt.legend()
-
-        plt.subplot(1, 2, 2)
-        plt.plot(metrics["timestamps"], metrics["kalman_phase_velocities"], label="Phase Frequency Velocity ($X_1$)", color='crimson')
-        plt.xlabel("Time (s)")
-        plt.ylabel("Velocity Frequency (rad/s)")
-        plt.title("Kalman Dynamic Phase Frequency Estimate")
-        plt.grid(True, linestyle="--", alpha=0.5)
-        plt.legend()
-
-        plt.tight_layout()
-        plt.savefig(os.path.join(storage_path, "kalman_telemetry.png"))
-        plt.show()
 
 
 def main():
     with SystemController() as controller:
         metrics = initialize_metrics()
         setup_hardware(controller)
-
         data_manager.configure(storage_path)
 
         try:
@@ -235,11 +173,10 @@ def main():
                 raise ValueError(f"Unsupported prediction method: {pred_method}")
             
             trigger_controller = TriggerDecider()
-            run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, metrics, iterations=5000)
-
-            plot_metrics(metrics)
+            run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, metrics, iterations=2000)
 
             logger.info("Acquisition loop finished. Rendering metrics...")
+            plot_metrics(metrics)
         finally:
             data_manager.close()
 

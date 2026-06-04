@@ -55,8 +55,11 @@ class XimeaCamera:
 
             timestamp = self.img_buffer.tsSec + self.img_buffer.tsUSec / 1e6
             frame_data = self.img_buffer.get_image_data_numpy()
+            metadata = {
+                "is_synthetic": False
+            }
 
-            return frame_data, timestamp
+            return frame_data, timestamp, metadata
         except xiapi.Xi_error as e:
             logger.error(f"Failed to get frame from camera SN {self.serial_number}: {e}")
             raise
