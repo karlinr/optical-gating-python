@@ -13,7 +13,9 @@ import numpy as np
 REPLAY_TIFF_FILE = True            # Set to True to replay a real TIFF file; False for synthetic mode
 
 # --- TIFF Replay Mode Settings ---
-TIFF_FILE_PATH = r"C:\Users\Karlin\Documents\PhD\optical-gating-python\data\test_data.tif"  # Path to your multi-frame TIFF stack file
+#TIFF_FILE_PATH = r"C:\Users\karli\Documents\PhD\Analysis\Thesis\MLE\optical-gating-python\data\healthy_good_orientation.tif"  # Path to your multi-frame TIFF stack file
+TIFF_FILE_PATH = r"C:\Users\karli\Documents\PhD\Analysis\Thesis\MLE\optical-gating-python\data\arrhyth.tif"  # Path to your multi-frame TIFF stack file
+
 LOOP_TIFF = False                    # Loop back to frame 0 upon hitting the end of the stack
 
 # --- Synthetic Heart Generation Settings ---
