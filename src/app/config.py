@@ -24,11 +24,11 @@ class ExperimentConfig:
 class TimingBox:
     # Karlin tempnote:
     # For my 
-    # Desktop I use PORT = 'COM5' and EMULATOR_PORT = 'COM4'
+    # Desktop I use PORT = 'COM5' and EMULATOR_PORT = 'COM6'
     # Laptop I use PORT = 'COM3' and EMULATOR_PORT = 'COM4'
     # SPIM I use PORT = 'COM3'
     PORT = 'COM5'#'COM5'#'COM3'
-    EMULATOR_PORT = 'COM4'#'COM6'
+    EMULATOR_PORT = 'COM6'#'COM6'
     
     class Physical(IntEnum):
         """Actual BNC ports on the Timing Box."""
@@ -102,11 +102,11 @@ class Gating:
     # Methods to estimate and predict phase
     # Options for PHASE_SOURCE: SAD or MLE
     # Options for PREDICTION_METHOD: BARRIER or KALMAN
-    PHASE_SOURCE = "MLE"
+    PHASE_SOURCE = "MLE_ANOMALY"
     PREDICTION_METHOD = "KALMAN"
 
     # Whether we should log all phase estimates or just the PHASE_SOURCE one
-    ENABLED_ESTIMATORS = ["SAD", "MLE"]
+    ENABLED_ESTIMATORS = ["SAD", "MLE_ANOMALY"]
 
     # SAD parameters
     NUM_EXTRA_REF_FRAMES = 2
@@ -116,8 +116,8 @@ class Gating:
     MIN_HEART_RATE_HZ = 0.5
 
     # MLE parameters
-    MLE_BOOTSTRAP_FRAMES = 1200
-    MLE_BINS = 40
+    MLE_BOOTSTRAP_FRAMES = 1000
+    MLE_BINS = 38
     MLE_MIN_NOISE = 1
     MLE_FIT_POINTS = 1
 
@@ -134,6 +134,9 @@ class Gating:
     # Prediction parameters
     PREDICTION_LATENCY = 0.05
     EXTRAPOLATION_FACTOR = 1.5
+
+    # Drift correction parameters
+    DRIFT_CORRECT = True
 
 class Config:
     EMULATE_CAMERA = True  # Whether to use the camera emulator or real hardware

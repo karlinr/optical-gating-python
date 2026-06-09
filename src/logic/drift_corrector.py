@@ -1,6 +1,7 @@
 import numpy as np
 from loguru import logger
 from logic.utils import sad_with_references
+from app.config import Config
 
 class DriftCorrector:
     """ Drift corrector adapted from open-optical-gating"""
@@ -9,52 +10,61 @@ class DriftCorrector:
         self.drift = (0, 0)
 
     def add_sample(self, frame, best_match = None, refs = None, matching_frame = None, dxRange=range(-30,31,3), dyRange=range(-30,31,3)):
-        if best_match is not None:
-            self.drift = self._update_drift_estimate(frame, best_match, self.drift)
-        elif refs is not None:
-            self.drift = self._get_drift_estimate(frame, refs, matching_frame=matching_frame, dxRange=dxRange, dyRange=dyRange)
+        if Config.Gating.DRIFT_CORRECT:
+            if best_match is not None:
+                self.drift = self._update_drift_estimate(frame, best_match, self.drift)
+            elif refs is not None:
+                self.drift = self._get_drift_estimate(frame, refs, matching_frame=matching_frame, dxRange=dxRange, dyRange=dyRange)
+            else:
+                logger.warning("DriftCorrector.add_sample called without target frame or references.")
+                
+            return self.drift
         else:
-            logger.warning("DriftCorrector.add_sample called without target frame or references.")
-            
-        return self.drift
+            return (0, 0)
 
     def adjust_reference_array(self, array, drift=None):
-        if drift is None:
-            drift = self.drift
-        dx, dy = drift
-        mx, my = abs(dx), abs(dy)
-        
-        if mx == 0 and my == 0:
-            return array
+        if Config.Gating.DRIFT_CORRECT:
+            if drift is None:
+                drift = self.drift
+            dx, dy = drift
+            mx, my = abs(dx), abs(dy)
             
-        w_idx = array.ndim - 2
-        h_idx = array.ndim - 1
-        W = array.shape[w_idx]
-        H = array.shape[h_idx]
-        
-        slices = [slice(None)] * array.ndim
-        slices[w_idx] = slice(mx, W - mx)
-        slices[h_idx] = slice(my, H - my)
-        
-        return array[tuple(slices)]
+            if mx == 0 and my == 0:
+                return array
+                
+            w_idx = array.ndim - 2
+            h_idx = array.ndim - 1
+            W = array.shape[w_idx]
+            H = array.shape[h_idx]
+            
+            slices = [slice(None)] * array.ndim
+            slices[w_idx] = slice(mx, W - mx)
+            slices[h_idx] = slice(my, H - my)
+            
+            return array[tuple(slices)]
+        else:
+            return array
 
     def adjust_live_frame(self, frame, drift=None):
-        if drift is None:
-            drift = self.drift
-        dx, dy = drift
-        mx, my = abs(dx), abs(dy)
-        
-        if mx == 0 and my == 0:
-            return frame
+        if Config.Gating.DRIFT_CORRECT:
+            if drift is None:
+                drift = self.drift
+            dx, dy = drift
+            mx, my = abs(dx), abs(dy)
             
-        W, H = frame.shape
-        
-        start_x = mx + dx
-        end_x = W - mx + dx
-        start_y = my + dy
-        end_y = H - my + dy
-        
-        return frame[start_x:end_x, start_y:end_y]
+            if mx == 0 and my == 0:
+                return frame
+                
+            W, H = frame.shape
+            
+            start_x = mx - dx
+            end_x = W - mx - dx
+            start_y = my - dy
+            end_y = H - my - dy
+            
+            return frame[start_x:end_x, start_y:end_y]
+        else:
+            return frame
     
     def _get_drift_estimate(self, frame, refs, matching_frame=None, dxRange=range(-30,31,3), dyRange=range(-30,31,3)):
         """ Determine an initial estimate of the sample drift.
