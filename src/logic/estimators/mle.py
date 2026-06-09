@@ -64,10 +64,6 @@ class MLEEstimator(PhaseEstimator):
         logger.info(f"MLE model built in {time.time() - start_time:.2f} seconds with {len(clean_history)} frames.")
 
     def estimate(self, frame):
-        if self._last_best_idx is not None:
-            prev_best_match = self.binned_frames[self._last_best_idx]
-            self.drift_corrector.add_sample(frame, best_match=prev_best_match)
-
         corrected_binned = self.drift_corrector.adjust_reference_array(self.binned_frames)
         corrected_noise = self.drift_corrector.adjust_reference_array(self.noise_estimate)
         corrected_frame = self.drift_corrector.adjust_live_frame(frame)
@@ -109,6 +105,9 @@ class MLEEstimator(PhaseEstimator):
 
         phase_radians = ((best_idx + vertex_offset + 0.5) % n_bins / n_bins) * 2 * np.pi
         uncertainty_radians = np.sqrt(1 / a) * (2 * np.pi / n_bins)
+
+        current_best_match = self.binned_frames[best_idx]
+        self.drift_corrector.add_sample(frame, best_match=current_best_match)
         
         return {
             "phase": phase_radians,

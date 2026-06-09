@@ -194,10 +194,6 @@ class SADEstimator(PhaseEstimator):
             
         return target_frame, barrier_frame
     def estimate(self, frame):
-        if hasattr(self, '_last_best_idx') and self._last_best_idx is not None:
-            prev_best_match = self.reference_frames[self._last_best_idx]
-            self.drift_corrector.add_sample(frame, best_match=prev_best_match)
-
         corrected_refs = self.drift_corrector.adjust_reference_array(self.reference_frames)
         corrected_frame = self.drift_corrector.adjust_live_frame(frame)
 
@@ -208,6 +204,9 @@ class SADEstimator(PhaseEstimator):
         
         offset, score = v_fitting(scores[best_idx - 1], scores[best_idx], scores[best_idx + 1])
         phase = ((best_idx + offset - Config.Gating.NUM_EXTRA_REF_FRAMES) / self.reference_period) * 2 * np.pi
+
+        current_best_match = self.reference_frames[best_idx]
+        self.drift_corrector.add_sample(frame, best_match=current_best_match)
 
         return {
             "phase": phase % (2 * np.pi),
