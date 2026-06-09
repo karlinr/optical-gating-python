@@ -14,7 +14,7 @@ REPLAY_TIFF_FILE = True            # Set to True to replay a real TIFF file; Fal
 
 # --- TIFF Replay Mode Settings ---
 TIFF_FILE_PATH = r"C:\Users\Karlin\Documents\PhD\optical-gating-python\data\test_data.tif"  # Path to your multi-frame TIFF stack file
-LOOP_TIFF = False                    # Loop back to frame 0 upon hitting the end of the stack
+LOOP_TIFF = False
 
 # --- Synthetic Heart Generation Settings ---
 BASE_HEART_RATE_HZ = 2.0            # Baseline frequency of heart contraction (2.0 Hz = 120 BPM)

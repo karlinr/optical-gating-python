@@ -2,7 +2,7 @@ from loguru import logger
 import numpy as np
 from abc import ABC, abstractmethod
 
-# Ensure we use the optimized utils
+from logic.drift_corrector import DriftCorrector
 from logic.estimators.base import register_estimator, PhaseEstimator
 from logic.utils import v_fitting, chi_sq, sad_with_references 
 from app.config import Config
@@ -24,6 +24,7 @@ class SADEstimator(PhaseEstimator):
         self.barrier_phase = None
         self.frame_history = []
         self.period_history = []
+        self.drift_corrector = DriftCorrector()
 
     def update(self, frame, **kwargs):
         """Adds a frame and manages the history buffer based on heart rate."""
@@ -192,18 +193,22 @@ class SADEstimator(PhaseEstimator):
                 break
             
         return target_frame, barrier_frame
-
     def estimate(self, frame):
-        """Estimates the phase and returns (phase, score)."""
-        scores = sad_with_references(frame, self.reference_frames)
+        if hasattr(self, '_last_best_idx') and self._last_best_idx is not None:
+            prev_best_match = self.reference_frames[self._last_best_idx]
+            self.drift_corrector.add_sample(frame, best_match=prev_best_match)
+
+        corrected_refs = self.drift_corrector.adjust_reference_array(self.reference_frames)
+        corrected_frame = self.drift_corrector.adjust_live_frame(frame)
+
+        scores = sad_with_references(corrected_frame, corrected_refs)
+        
         best_idx = np.argmin(scores[Config.Gating.NUM_EXTRA_REF_FRAMES : -Config.Gating.NUM_EXTRA_REF_FRAMES]) + Config.Gating.NUM_EXTRA_REF_FRAMES
+        self._last_best_idx = best_idx  # Store for next frame's tracking
         
         offset, score = v_fitting(scores[best_idx - 1], scores[best_idx], scores[best_idx + 1])
-        
         phase = ((best_idx + offset - Config.Gating.NUM_EXTRA_REF_FRAMES) / self.reference_period) * 2 * np.pi
 
-        logger.debug(f"SAD Estimate: Best Index={best_idx}, Offset={offset:.2f}, Score={score:.2f}")
-        
         return {
             "phase": phase % (2 * np.pi),
             "target_phase": self.target_phase,
@@ -213,6 +218,8 @@ class SADEstimator(PhaseEstimator):
                 "best_index": best_idx - Config.Gating.NUM_EXTRA_REF_FRAMES,
                 "offset": offset,
                 "reference_period": self.reference_period,
-                "scores": scores
+                "scores": scores,
+                "drift_x": self.drift_corrector.drift[0],
+                "drift_y": self.drift_corrector.drift[1]
             }
         }

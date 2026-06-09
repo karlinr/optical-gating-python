@@ -17,6 +17,8 @@ class ExperimentConfig:
 
     # Logging settings
     LOGGING_LEVEL = "INFO"
+    SAVE_BRIGHTFIELD_FRAMES = False
+    SAVE_FLUORESCENCE_FRAMES = True
 
 # Timing box and pin mapping
 class TimingBox:
@@ -109,8 +111,8 @@ class Gating:
     MIN_HEART_RATE_HZ = 0.5
 
     # MLE parameters
-    MLE_BOOTSTRAP_FRAMES = 1000
-    MLE_BINS = 46
+    MLE_BOOTSTRAP_FRAMES = 1200
+    MLE_BINS = 40
     MLE_MIN_NOISE = 1
     MLE_FIT_POINTS = 1
 

@@ -111,8 +111,10 @@ def plot_metrics(metrics):
     lookaheads = [p[0] if p else None for p in metrics["prediction_results"]]
     k_phases = [p[1].get("phase_estimate") if p else None for p in metrics["prediction_results"]]
     k_velocities = [p[1].get("phase_velocity_estimate") if p else None for p in metrics["prediction_results"]]
+    drift_xs = [r.get("ACTIVE", {}).get("metrics", {}).get("drift_x") for r in metrics["phase_results"]]
+    drift_ys = [r.get("ACTIVE", {}).get("metrics", {}).get("drift_y") for r in metrics["phase_results"]]
 
-    fig, axs = plt.subplots(3, 2, figsize=(14, 10), sharex=True)
+    fig, axs = plt.subplots(4, 2, figsize=(14, 13), sharex=True)
     
     axs[0, 0].plot(timestamps, metrics["framerates"], color='tab:blue')
     axs[0, 0].set_title("Camera Framerate (fps)")
@@ -145,13 +147,23 @@ def plot_metrics(metrics):
         axs[2, 1].scatter(tx, ty, label="Trigger", color="red", marker="x")
     axs[2, 1].set_title("Gated Lookahead and Hardware Trigger Commitments")
 
+    valid_ts_x = [t for t, x in zip(timestamps, drift_xs) if x is not None]
+    if valid_ts_x:
+        axs[3, 0].plot(valid_ts_x, [x for x in drift_xs if x is not None], color='tab:orange', lw=1.2)
+    axs[3, 0].set_title("Sample Drift X (pixels)")
+
+    valid_ts_y = [t for t, y in zip(timestamps, drift_ys) if y is not None]
+    if valid_ts_y:
+        axs[3, 1].plot(valid_ts_y, [y for y in drift_ys if y is not None], color='tab:red', lw=1.2)
+    axs[3, 1].set_title("Sample Drift Y (pixels)")
+
     for ax in axs.flat:
         ax.grid(True, linestyle="--", alpha=0.4)
         if ax.get_legend_handles_labels()[0]:
             ax.legend(loc="upper right", fontsize='small')
             
-    axs[2, 0].set_xlabel("Time (s)")
-    axs[2, 1].set_xlabel("Time (s)")
+    axs[3, 0].set_xlabel("Time (s)")
+    axs[3, 1].set_xlabel("Time (s)")
 
     plt.tight_layout()
     plt.savefig(os.path.join(storage_path, "acquisition_metrics.png"))
@@ -173,7 +185,7 @@ def main():
                 raise ValueError(f"Unsupported prediction method: {pred_method}")
             
             trigger_controller = TriggerDecider()
-            run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, metrics, iterations=2000)
+            run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, metrics, iterations=3000)
 
             logger.info("Acquisition loop finished. Rendering metrics...")
             plot_metrics(metrics)
