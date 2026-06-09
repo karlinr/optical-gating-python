@@ -22,8 +22,8 @@ class ExperimentConfig:
 
 # Timing box and pin mapping
 class TimingBox:
-    PORT = 'COM5'#'COM3'
-    EMULATOR_PORT = 'COM6'
+    PORT = 'COM7'#'COM5'#'COM3'
+    EMULATOR_PORT = 'COM4'#'COM6'
     
     class Physical(IntEnum):
         """Actual BNC ports on the Timing Box."""
@@ -97,11 +97,11 @@ class Gating:
     # Methods to estimate and predict phase
     # Options for PHASE_SOURCE: SAD or MLE
     # Options for PREDICTION_METHOD: BARRIER or KALMAN
-    PHASE_SOURCE = "MLE"
+    PHASE_SOURCE = "MLE_ANOMALY"
     PREDICTION_METHOD = "KALMAN"
 
     # Whether we should log all phase estimates or just the PHASE_SOURCE one
-    ENABLED_ESTIMATORS = ["SAD", "MLE"]
+    ENABLED_ESTIMATORS = ["SAD", "MLE_ANOMALY"]
 
     # SAD parameters
     NUM_EXTRA_REF_FRAMES = 2

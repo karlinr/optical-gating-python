@@ -47,7 +47,8 @@ def initialize_metrics():
 def run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, metrics, iterations):
     for i in range(iterations):
         frame, timestamp, metadata = controller.get_latest_bf_frame()
-        data_manager.save("brightfield", frame.copy(), chunk_size=Config.ExperimentConfig.BRIGHTFIELD_CHUNK_SIZE)
+        if Config.ExperimentConfig.SAVE_BRIGHTFIELD_FRAMES:
+            data_manager.save("brightfield", frame.copy(), chunk_size=Config.ExperimentConfig.BRIGHTFIELD_CHUNK_SIZE)
 
         phase_results = phase_manager.update(frame, timestamp=timestamp)
         active = phase_results.get("ACTIVE", {})
@@ -86,7 +87,8 @@ def run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigg
                         def async_fluorescence_save(target = exact_hardware_target):
                             try:
                                 fl_frame, fl_timestamp, fl_metadata = controller.get_latest_fl_frame()
-                                data_manager.save("fluorescence", fl_frame, chunk_size=Config.ExperimentConfig.FLUORESCENCE_CHUNK_SIZE)
+                                if Config.ExperimentConfig.SAVE_FLUORESCENCE_FRAMES:
+                                    data_manager.save("fluorescence", fl_frame, chunk_size=Config.ExperimentConfig.FLUORESCENCE_CHUNK_SIZE)
                                 logger.success(f"Asynchronously saved FL frame for target time {target:.4f}")
                             except Exception as e:
                                 logger.error(f"Background fluorescence pipeline failed: {e}")
