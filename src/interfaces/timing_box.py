@@ -53,13 +53,13 @@ class TimingBox:
             logger.error(f"Invalid command: {cmd_name}")
             return
         
-        logger.info(f"Sending command: {cmd_name} with data: {data}")
+        logger.debug(f"Sending command: {cmd_name} with data: {data}")
 
         # Construct payload: [Command Byte, Data...] and send
         payload = bytearray([cmd_byte, *(data or [])])
         self.ser.write(payload)
         self.ser.flush()
-        logger.info(f"Sent {cmd_name}: {payload.hex()}")
+        logger.debug(f"Sent {cmd_name}: {payload.hex()}")
 
     def map_pin(self, physical_pin, logical_pin, invert=False):
         """
@@ -147,7 +147,7 @@ class TimingBox:
             if response[0] == 0:
                 logger.warning(f"FIRE_AT command scheduled in the past. Current clock: {int.from_bytes(response[1:4], 'big')}")
             else:
-                logger.success(f"FIRE_AT response: {response[0]} (Clock: {int.from_bytes(response[1:4], 'big')})")
+                logger.debug(f"FIRE_AT response: {response[0]} (Clock: {int.from_bytes(response[1:4], 'big')})")
             return int.from_bytes(response[1:4], 'big'), response[0]
         else:
             logger.error("Failed to receive FIRE_AT response")

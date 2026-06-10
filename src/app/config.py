@@ -106,7 +106,7 @@ class Gating:
     PREDICTION_METHOD = "KALMAN"
 
     # Whether we should log all phase estimates or just the PHASE_SOURCE one
-    ENABLED_ESTIMATORS = ["SAD", "MLE_ANOMALY"]
+    ENABLED_ESTIMATORS = ["MLE_ANOMALY"]
 
     # SAD parameters
     NUM_EXTRA_REF_FRAMES = 2
@@ -137,6 +137,8 @@ class Gating:
 
     # Drift correction parameters
     DRIFT_CORRECT = True
+    DRIFT_MAX_SEARCH = 1
+    DRIFT_INITIAL_SEARCH = 5
 
 class Config:
     EMULATE_CAMERA = True  # Whether to use the camera emulator or real hardware

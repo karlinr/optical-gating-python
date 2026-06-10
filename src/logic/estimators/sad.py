@@ -193,6 +193,7 @@ class SADEstimator(PhaseEstimator):
                 break
             
         return target_frame, barrier_frame
+    
     def estimate(self, frame):
         corrected_refs = self.drift_corrector.adjust_reference_array(self.reference_frames)
         corrected_frame = self.drift_corrector.adjust_live_frame(frame)
@@ -218,7 +219,7 @@ class SADEstimator(PhaseEstimator):
                 "offset": offset,
                 "reference_period": self.reference_period,
                 "scores": scores,
-                "drift_x": self.drift_corrector.drift[0],
-                "drift_y": self.drift_corrector.drift[1]
+                "drift_x": self.drift_corrector.drift_x,
+                "drift_y": self.drift_corrector.drift_y
             }
         }

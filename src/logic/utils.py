@@ -72,6 +72,12 @@ def sad_with_references(test_frame, reference_stack):
         
     return sad_scores
 
+def sad_with_reference(test_frame, reference):
+    """
+    Compute SAD between a test frame and a single reference frame.
+    """
+    return sad_with_references(test_frame, reference[np.newaxis, ...])[0]
+
 _warmup_frame = np.zeros((512, 512), dtype=np.uint16)
 _warmup_stack = np.zeros((2, 512, 512), dtype=np.uint16)
 _warmup_floats = np.zeros((2, 512, 512), dtype=np.float32)

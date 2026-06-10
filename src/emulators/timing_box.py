@@ -14,7 +14,7 @@ import socket
 # Configure logging
 logger.remove()
 logger.add(sys.stderr, level="INFO", format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>")
-logger.add("logs/emulator/experiment_{time}.log", rotation="10 MB", level="DEBUG", retention="10 days")
+#logger.add("logs/emulator/experiment_{time}.log", rotation="10 MB", level="DEBUG", retention="10 days")
 
 from app.config import Config
 

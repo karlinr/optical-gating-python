@@ -6,7 +6,7 @@ from logic.estimators.base import register_estimator, PhaseEstimator
 from logic.utils import chi_sq 
 from app.config import Config
 from app.data_manager import data_manager
-from logic.drift_corrector import DriftCorrector  # Import the new utility
+from logic.drift_corrector import DriftCorrector
 
 @register_estimator("MLE")
 class MLEEstimator(PhaseEstimator):
@@ -100,12 +100,13 @@ class MLEEstimator(PhaseEstimator):
 
         logger.debug(
             f"MLE Estimate: Best Bin={best_idx}, Offset={vertex_offset:.2f}, "
-            f"Reduced Chi2={reduced_chi_squared:.2f} | Drift=({self.drift_corrector.drift[0]},{self.drift_corrector.drift[1]})"
+            f"Reduced Chi2={reduced_chi_squared:.2f} | Drift=({self.drift_corrector.drift_x},{self.drift_corrector.drift_y})"
         )
 
         phase_radians = ((best_idx + vertex_offset + 0.5) % n_bins / n_bins) * 2 * np.pi
         uncertainty_radians = np.sqrt(1 / a) * (2 * np.pi / n_bins)
 
+        drift_x, drift_y = self.drift_corrector.drift_x, self.drift_corrector.drift_y
         current_best_match = self.binned_frames[best_idx]
         self.drift_corrector.add_sample(frame, best_match=current_best_match)
         
@@ -120,8 +121,8 @@ class MLEEstimator(PhaseEstimator):
                 "reference_period": n_bins,
                 "vertex_offset": vertex_offset,
                 "scores": scores,
-                "drift_x": self.drift_corrector.drift[0],
-                "drift_y": self.drift_corrector.drift[1]
+                "drift_x": drift_x,
+                "drift_y": drift_y
             }
         }
     
