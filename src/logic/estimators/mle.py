@@ -46,22 +46,30 @@ class MLEEstimator(PhaseEstimator):
         return None
 
     def build_model(self):
-        start_time = time.time()
         logger.info("Bootstrapping MLE model with collected frames...")
+
         n_bins = Config.Gating.MLE_BINS
         f_per_bin = len(self.frame_history) // n_bins
         self.frame_history.sort(key=lambda x: x[1])
+
         clean_history = self.frame_history[:n_bins * f_per_bin]
         raw_frames = np.array([h[0] for h in clean_history], dtype=np.float32)
         block = raw_frames.reshape(n_bins, f_per_bin, *raw_frames.shape[1:])
+
+        # Get model
         self.binned_frames = np.mean(block, axis=1)
+
+        # Get noise model
         sum_sq_diff = np.sum(np.diff(block, axis=1) ** 2, axis=1)
         self.noise_estimate = np.maximum(sum_sq_diff / (2 * (f_per_bin - 1)), Config.Gating.MLE_MIN_NOISE)
+
         data_manager.save("binned_frames", self.binned_frames.copy())
         data_manager.save("noise_estimate", self.noise_estimate.copy())
+
         self._ready = True
         self.frame_history = []
-        logger.info(f"MLE model built in {time.time() - start_time:.2f} seconds with {len(clean_history)} frames.")
+
+        logger.info("MLE model bootstrapped successfully.")
 
     def estimate(self, frame):
         corrected_binned = self.drift_corrector.adjust_reference_array(self.binned_frames)
