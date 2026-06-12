@@ -5,12 +5,13 @@ import queue
 import socket
 import json
 import numpy as np
+from app.config import Config
 
 # ==============================================================================
 # EMULATOR CONFIGURATION SETTINGS
 # ==============================================================================
 REPLAY_TIFF_FILE = True            
-TIFF_FILE_PATH = r"C:\Users\Karlin\Documents\PhD\optical-gating-python\data\test_data2.tif"  
+TIFF_FILE_PATH = r"../data/arrhyth.tif"  
 LOOP_TIFF = True                  # FORCED TRUE to prevent main loop flatlining
 
 BASE_HEART_RATE_HZ = 2.0            
@@ -25,13 +26,13 @@ class CameraEmulator:
     _worker_thread = None
 
     def __init__(self):
-        self.width = 32
-        self.height = 32
+        self.width = 128
+        self.height = 128
         self.serial_number = None
         self.is_running = False
         self.trigger_mode = False
         self.trigger_pin = None
-        self.framerate = 80  
+        self.framerate = Config.Cameras.BF.framerate  
         self.frame_queue = queue.Queue(maxsize=16)
         self._stop_event = threading.Event()
         self._trigger_event = threading.Event() 
@@ -103,6 +104,19 @@ class CameraEmulator:
         if not REPLAY_TIFF_FILE:
             return
         logger.info(f"Camera SN {self.serial_number} - Loading TIFF from: {TIFF_FILE_PATH}")
+        if hasattr(Config.Cameras, 'BF') and Config.Cameras.BF.serial == self.serial_number:
+            matched_config = Config.Cameras.BF
+        elif hasattr(Config.Cameras, 'FL') and Config.Cameras.FL.serial == self.serial_number:
+            matched_config = Config.Cameras.FL
+        if matched_config is not None:
+            if matched_config.downsample == "XI_DWN_2x2":
+                logger.info("Applying 2x2 downsampling to TIFF frames.")
+                sampling_factor = 2
+            elif matched_config.downsample == "XI_DWN_4x4":
+                logger.info("Applying 4x4 downsampling to TIFF frames.")
+                sampling_factor = 4
+            else:
+                sampling_factor = 1
         try:
             from PIL import Image
             img = Image.open(TIFF_FILE_PATH)
@@ -113,13 +127,13 @@ class CameraEmulator:
                     img.seek(img.tell() + 1)
             except EOFError:
                 pass
-            self.tiff_frames = frames
+            self.tiff_frames = frames[:, ::sampling_factor, ::sampling_factor]
             self.height, self.width = self.tiff_frames[0].shape
             logger.success(f"Loaded {len(self.tiff_frames)} frames via PIL.")
         except Exception:
             try:
                 import tifffile
-                self.tiff_frames = tifffile.imread(TIFF_FILE_PATH)
+                self.tiff_frames = tifffile.imread(TIFF_FILE_PATH)[::, ::sampling_factor, ::sampling_factor]
                 self.height, self.width = self.tiff_frames[0].shape
                 logger.success(f"Loaded {len(self.tiff_frames)} frames via tifffile.")
             except Exception as e:
@@ -199,7 +213,7 @@ class CameraEmulator:
             # Synthetic Mode Fallback
             dt = now - self._last_phase_time
             self._last_phase_time = now
-            self.pixel_offsets += np.random.uniform(-0.005, 0.005, self.pixel_offsets.shape).astype(np.float32)
+            #self.pixel_offsets += np.random.uniform(-0.005, 0.005, self.pixel_offsets.shape).astype(np.float32)
             self.pixel_offsets = np.mod(self.pixel_offsets, 2 * np.pi)
             freq = BASE_HEART_RATE_HZ + HEART_RATE_MODULATION_AMP * np.sin(2 * np.pi * HEART_RATE_MODULATION_FREQ * t)
             self.accumulated_phase += 2 * np.pi * freq * dt

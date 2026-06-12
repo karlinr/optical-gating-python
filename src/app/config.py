@@ -18,17 +18,17 @@ class ExperimentConfig:
     # Logging settings
     LOGGING_LEVEL = "INFO"
     SAVE_BRIGHTFIELD_FRAMES = False
-    SAVE_FLUORESCENCE_FRAMES = True
+    SAVE_FLUORESCENCE_FRAMES = False
 
 # Timing box and pin mapping
 class TimingBox:
     # Karlin tempnote:
     # For my 
     # Desktop I use PORT = 'COM5' and EMULATOR_PORT = 'COM6'
-    # Laptop I use PORT = 'COM3' and EMULATOR_PORT = 'COM4'
+    # Laptop I use PORT = 'COM4' and EMULATOR_PORT = 'COM7'
     # SPIM I use PORT = 'COM3'
-    PORT = 'COM5'#'COM5'#'COM3'
-    EMULATOR_PORT = 'COM6'#'COM6'
+    PORT = 'COM4'#'COM5'#'COM3'
+    EMULATOR_PORT = 'COM7'#'COM6'
     
     class Physical(IntEnum):
         """Actual BNC ports on the Timing Box."""
@@ -68,7 +68,7 @@ class Cameras:
     BF = CameraConfig(
         label="Brightfield camera",
         serial="28600723",
-        exposure_us=2000,
+        exposure_us=1000,
         gain=0.0,
         downsample="XI_DWN_2x2",
         roi=(828, 418, 484, 488),
@@ -82,21 +82,21 @@ class Cameras:
 
     # Fluorescence
     FL = CameraConfig(
-            label="Fluorescence camera",
-            serial="CEMAU2502004",
-            exposure_us=3000,
-            gain=1.0,
-            downsample=None,
-            roi=None,
-            trigger_pin=3, # Physical GPIO pin on the camera
-            box_pins=[
-                TimingBox.Logical.FL_1, 
-                TimingBox.Logical.LAS_BLUE, 
-                TimingBox.Logical.LAS_GREEN
-            ],
-            framerate=None,
-            sensor_taps = None
-        )
+        label="Fluorescence camera",
+        serial="CEMAU2502004",
+        exposure_us=6000,
+        gain=1.0,
+        downsample=None,
+        roi=None,
+        trigger_pin=3, # Physical GPIO pin on the camera
+        box_pins=[
+            TimingBox.Logical.FL_1, 
+            TimingBox.Logical.LAS_BLUE, 
+            TimingBox.Logical.LAS_GREEN
+        ],
+        framerate=None,
+        sensor_taps = None
+    )
 
 class Gating:
     # Methods to estimate and predict phase
@@ -106,7 +106,7 @@ class Gating:
     PREDICTION_METHOD = "KALMAN"
 
     # Whether we should log all phase estimates or just the PHASE_SOURCE one
-    ENABLED_ESTIMATORS = ["MLE_ANOMALY"]
+    ENABLED_ESTIMATORS = ["SAD","MLE_ANOMALY"]
 
     # SAD parameters
     NUM_EXTRA_REF_FRAMES = 2
@@ -118,7 +118,7 @@ class Gating:
     # MLE parameters
     MLE_BOOTSTRAP_FRAMES = 1000
     MLE_BINS = 38
-    MLE_MIN_NOISE = 1
+    MLE_MIN_NOISE = 5
     MLE_FIT_POINTS = 1
 
     # Barrier prediction parameters
@@ -132,12 +132,12 @@ class Gating:
     KALMAN_PROCESS_NOISE = 0.0001
 
     # Prediction parameters
-    PREDICTION_LATENCY = 0.05
-    EXTRAPOLATION_FACTOR = 1.5
+    PREDICTION_LATENCY = 0.15#0.05
+    EXTRAPOLATION_FACTOR = 2.5#1.5
 
     # Drift correction parameters
     DRIFT_CORRECT = True
-    DRIFT_MAX_SEARCH = 1
+    DRIFT_MAX_SEARCH = 2
     DRIFT_INITIAL_SEARCH = 5
 
 class Config:
