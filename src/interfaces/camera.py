@@ -47,7 +47,7 @@ class XimeaCamera:
         logger.info(f"Setting camera SN {self.serial_number} exposure to {config.exposure_us} microseconds.")
         self.cam.set_exposure(config.exposure_us)
 
-        time.sleep(0.1)  # Small delay to ensure settings are applied before starting acquisition
+        time.sleep(0.1)
 
     def get_latest_frame(self, timeout_ms=1000):
         try:

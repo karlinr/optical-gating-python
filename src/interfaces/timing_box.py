@@ -173,6 +173,8 @@ class TimingBox:
         if self.ser:
             self.ser.close()
 
+    # TODO: Check which of these are used and clean up the ones we don't need
+    # For future maintanability it feels better to have 1 or 2 functions which we consistently use to enforce the convention of always using brightfield time until triggering
     @staticmethod
     def to_24bit(value: float) -> int:
         """Standardizes any numeric value into the 0 to 2^24-1 range."""

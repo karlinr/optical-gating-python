@@ -40,8 +40,17 @@ class SystemController:
         Connects to the timing box and both cameras.
         """
         self.timing_box.connect()
-        self.bf_cam.connect(Config.Cameras.BF)
-        self.fl_cam.connect(Config.Cameras.FL)
+        # Try to connect 5 times with a delay in case of connection issues
+        for attempt in range(5):
+            try:
+                self.bf_cam.connect(Config.Cameras.BF)
+                self.fl_cam.connect(Config.Cameras.FL)
+                break
+            except Exception as e:
+                logger.error(f"Camera connection attempt {attempt + 1} failed: {e}")
+                if attempt == 4:
+                    raise ConnectionError("Failed to connect to cameras after multiple attempts.")
+                time.sleep(2)
 
         # Setup camera settings
         self.bf_cam.set_config(Config.Cameras.BF)
@@ -69,7 +78,7 @@ class SystemController:
             bf_frame = None
             fl_frame = None
             while bf_frame is None or fl_frame is None:
-                time.sleep(0.1) # Small sleep to reduce CPU load
+                time.sleep(0.1)
                 bf_frame, bf_timestamp, bf_metadata = self.bf_cam.get_latest_frame(timeout_ms = 5000)
                 fl_frame, fl_timestamp, fl_metadata = self.fl_cam.get_latest_frame(timeout_ms = 5000)
                 logger.info(f"Connection test: BF frame received: {bf_frame is not None}, FL frame received: {fl_frame is not None}")
@@ -140,7 +149,8 @@ class SystemController:
         # We have two points: (t1_box, t1_bf) and (t2_box, t2_bf)
         self.timestamp_to_ticks_gradient = tick_delta / time_delta
         # Force gradient to expected value to avoid issues with small timing discrepancies during testing
-        # NOTE: We may want to replace this. I will talk to Jonny about how we do this in SPIM GUI
+        # TODO: We need to replace this as we cannot assume this is constant.
+        # I'll check on the SPIM if the method above works (it fails on the emulator due to timing issues)
         expected_gradient = 1/TimingBox.TICK_SEC
         self.timestamp_to_ticks_gradient = expected_gradient
         self.timestamp_to_ticks_intercept = t1_box - self.timestamp_to_ticks_gradient * t1_bf
@@ -186,15 +196,9 @@ class SystemController:
         """
         
         frame, timestamp, metadata = self.bf_cam.get_latest_frame()
-
-        logger.debug(f"Framerate: {1 / (timestamp - self.last_timestamp)}, Timestamp: {timestamp}")
-
         framerate = 1 / (timestamp - self.last_timestamp) if self.last_timestamp else float('inf')
-
         self.last_timestamp = timestamp
-
         metadata["framerate"] = framerate
-
 
         return frame, timestamp, metadata
     
@@ -212,7 +216,6 @@ class SystemController:
     def trigger_fl_frame(self, timestamp: float):
         """Schedules a fluorescence trigger with safety checks for wrap-around."""
         target_tick = self.timestamp_to_ticks(timestamp)
-
         logger.info(f"Scheduling fluorescence trigger at timestamp {timestamp} (Timing Box tick: {target_tick})")
 
         return self.timing_box.fire_at(target_tick)

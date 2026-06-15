@@ -12,7 +12,8 @@ from app.config import Config
 # ==============================================================================
 REPLAY_TIFF_FILE = True            
 TIFF_FILE_PATH = r"../data/arrhyth.tif"  
-LOOP_TIFF = True                  # FORCED TRUE to prevent main loop flatlining
+#TIFF_FILE_PATH = r"../data/healthy_good_orientation.tif"
+LOOP_TIFF = False                  # FORCED TRUE to prevent main loop flatlining
 
 BASE_HEART_RATE_HZ = 2.0            
 HEART_RATE_MODULATION_AMP = 0.4     

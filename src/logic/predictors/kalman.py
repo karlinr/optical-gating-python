@@ -16,7 +16,7 @@ class KalmanPredictor(PhasePredictor):
         self.H = np.array([[1, 0]])
 
         self.last_timestamp = 0
-        self._is_initialized = False
+        self._is_initialised = False
 
     def _predict(self, dt):
         self.F = np.array([[1, dt], [0, 1]])
@@ -30,11 +30,11 @@ class KalmanPredictor(PhasePredictor):
 
 
     def update_phase(self, current_phase, timestamp, **kwargs):
-        if not self._is_initialized:
+        if not self._is_initialised:
             self.last_timestamp = timestamp
             self.X[0, 0] = current_phase
-            self._is_initialized = True
-            logger.info("Kalman predictor initialized.")
+            self._is_initialised = True
+            logger.info("Kalman predictor initialised.")
             return
         
         self.dt = timestamp - self.last_timestamp
@@ -78,6 +78,12 @@ class KalmanPredictor(PhasePredictor):
             
         time_to_target = phase_diff / self.X[1, 0]
         est_heart_period_s = 2 * np.pi / self.X[1, 0]
+
+        # Temporary safeguard against wildly unrealistic predictions, which can occur during long periods of uncertainty or if the filter diverges
+        # TODO: implement a more robust divergence detection and recovery mechanism
+        if time_to_target > 5.0:
+            logger.warning(f"Unrealistic time to target predicted: {time_to_target:.4f}s. Skipping prediction.")
+            return None, {}
         
         metadata = {
             "est_period": est_heart_period_s,
