@@ -154,7 +154,11 @@ class MLEEstimator(PhaseEstimator):
         )
 
         phase_radians = ((best_idx + vertex_offset) % n_bins / n_bins) * 2 * np.pi
-        uncertainty_radians = np.sqrt(1 / a) * (2 * np.pi / n_bins)
+        if a > 0:
+            uncertainty_radians = np.sqrt(1 / a) * (2 * np.pi / n_bins)
+        else:
+            uncertainty_radians = np.pi
+            logger.warning("MLE parabola is not convex. Uncertainty set to infinity.")
 
         drift_x, drift_y = self.drift_corrector.drift_x, self.drift_corrector.drift_y
         current_best_match = self.binned_frames[best_idx]
