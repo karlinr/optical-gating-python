@@ -5,12 +5,12 @@ from app.data_manager import data_manager
 import os
 import numpy as np
 
+
 from interfaces.system import SystemController
 from app.config import Config
 
 from logic.phase_estimator import PhaseManager
 from logic.predictors.base import predictor_registry
-from logic.estimators.base import estimator_registry
 from logic.trigger_decider import TriggerDecider
 
 import matplotlib.pyplot as plt
@@ -34,8 +34,8 @@ def setup_hardware(controller):
     logger.success("Hardware setup for experiment complete. Ready to run.")
     return bf_test_frame.shape, fl_test_frame.shape
 
-def initialize_metrics():
-    """Initializes the structured session tracking metrics dictionary."""
+def initialise_metrics():
+    """Initialises the structured session tracking metrics dictionary."""
     return {
         "timestamps": [],
         "framerates": [],
@@ -107,58 +107,65 @@ def run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigg
 def plot_metrics(metrics):
     timestamps = metrics["timestamps"]
     
-    active_res = [r.get("ACTIVE", {}) for r in metrics["phase_results"]]
-    active_met = [a.get("metrics", {}) for a in active_res]
+    # Identify all individual estimators present in the results (excluding the 'ACTIVE' metadata block)
+    est_names = sorted(list(set(name for r in metrics["phase_results"] for name in r if name != "ACTIVE")))
 
-    chi_squares = [m.get("reduced_chi_squared") for m in active_met]
+    active_res = [r.get("ACTIVE", {}) for r in metrics["phase_results"]]
     active_phases = [a.get("phase") for a in active_res]
-    drift_xs = [m.get("drift_x") for m in active_met]
-    drift_ys = [m.get("drift_y") for m in active_met]
 
     periods = [p[1]["est_period"] if p else None for p in metrics["prediction_results"]]
     lookaheads = [p[0] if p else None for p in metrics["prediction_results"]]
     k_phases = [p[1].get("phase_estimate") if p else None for p in metrics["prediction_results"]]
     k_velocities = [p[1].get("phase_velocity_estimate") if p else None for p in metrics["prediction_results"]]
 
-    mu_zs = [m.get("mu_z") for m in active_met]
-    sigma_zs = [m.get("sigma_z") for m in active_met]
-    median_zs = [m.get("median_z") for m in active_met]
-    mad_zs = [m.get("mad_z") for m in active_met]
-    diff_mean_medians = [m.get("diff_mean_median") for m in active_met]
-    diff_std_mads = [m.get("diff_std_mad") for m in active_met]
-
-    fig, axs = plt.subplots(7, 2, figsize=(14, 18), sharex=True)
+    fig, axs = plt.subplots(4, 2, figsize=(14, 18))
     axes = axs.flatten()
     
-    # Camera Framerate
+    # Helper to check if a subplot has any active handles before drawing a legend
+    def try_legend(ax):
+        handles, labels = ax.get_legend_handles_labels()
+        if handles:
+            ax.legend()
+
+    # 0. Camera Framerate
     axes[0].plot(timestamps, metrics["framerates"])
     axes[0].set_title("Camera Framerate (fps)")
     
-    # Model Fit
-    axes[1].plot(timestamps, chi_squares)
-    axes[1].set_title("Reduced Chi-squared")
+    # 1. Model Fit / Alignment Scores
+    for name in est_names:
+        chi_squares = [r.get(name, {}).get("metrics", {}).get("reduced_chi_squared") for r in metrics["phase_results"]]
+        if any(c is not None for c in chi_squares):
+            axes[1].plot(timestamps, chi_squares, label=f"{name} Reduced Chi2")
+        # Plot 1, 3, and 5 sigma thresholds for reference
+        sad_scores = [r.get(name, {}).get("metrics", {}).get("sad_score") for r in metrics["phase_results"]]
+        """if any(s is not None for s in sad_scores):
+            axes[1].plot(timestamps, sad_scores, label=f"{name} SAD Score", alpha=0.7)"""
+    axes[1].set_title("Model Fit / Alignment Scores")
+    #axes[1].axhline(1.0, color='green', linestyle='--')
+    #axes[1].axhline(3.0, color='orange', linestyle='--')
+    #axes[1].axhline(5.0, color='red', linestyle='--')
+    try_legend(axes[1])
 
-    # Phase Estimates
-    est_names = set(n for r in metrics["phase_results"] for n in r if n != "ACTIVE")
+    # 2. Phase Estimates
     for name in est_names:
         phases = [r.get(name, {}).get("phase") for r in metrics["phase_results"]]
         axes[2].plot(timestamps, phases, label=f"{name} Estimate", alpha=0.4, linestyle=":")
-    axes[2].plot(timestamps, active_phases, label="Active Phase", color="black")
+    axes[2].plot(timestamps, active_phases, label="Active Phase", color="black", linewidth=1.5)
     if any(p is not None for p in k_phases):
         axes[2].plot(timestamps, k_phases, label="Kalman Phase", linestyle="--")
     axes[2].set_title("Phase Estimates Over Time")
-    axes[2].legend()
+    try_legend(axes[2])
 
-    # Kalman Phase Velocity
+    # 3. Kalman Phase Velocity
     if any(p is not None for p in k_velocities):
         axes[3].plot(timestamps, k_velocities)
     axes[3].set_title("Kalman Phase Velocity")
 
-    # Cardiac Period
+    # 4. Cardiac Period
     axes[4].plot(timestamps, periods)
     axes[4].set_title("Estimated Cardiac Period (s)")
 
-    # Lookahead and Triggers
+    # 5. Lookahead and Triggers
     pred_pts = [(t, t + l) for t, l in zip(timestamps, lookaheads) if l is not None]
     if pred_pts:
         px, py = zip(*pred_pts)
@@ -167,51 +174,50 @@ def plot_metrics(metrics):
         tx, ty = zip(*metrics["committed_triggers"])
         axes[5].scatter(tx, ty, label="Trigger", marker="x", color="red")
     axes[5].set_title("Gated Lookahead and Hardware Trigger Commitments")
-    axes[5].legend()
+    try_legend(axes[5])
 
-    # Drift X
-    axes[6].plot(timestamps, drift_xs)
-    axes[6].set_title("Drift X (pixels)")
+    # 6. Drift X/Y
+    for name in est_names:
+        drift_xs = [r.get(name, {}).get("metrics", {}).get("drift_x") for r in metrics["phase_results"]]
+        drift_ys = [r.get(name, {}).get("metrics", {}).get("drift_y") for r in metrics["phase_results"]]
+        if any(d is not None for d in drift_xs):
+            axes[6].plot(timestamps, drift_xs, label=f"{name} Drift X")
+        if any(d is not None for d in drift_ys):
+            axes[6].plot(timestamps, drift_ys, label=f"{name} Drift Y")
+    axes[6].set_title("Drift (pixels)")
+    try_legend(axes[6])
 
-    # Drift Y
-    axes[7].plot(timestamps, drift_ys)
-    axes[7].set_title("Drift Y (pixels)")
+    # Phase delta-phase
+    # Where delta-phase is np.diff(np.unwrap(phases)) plotted against the phase itself
 
-    # Anomaly Mean Z
-    axes[8].plot(timestamps, mu_zs)
-    axes[8].axhline(2.0, color='red', linestyle='--')
-    axes[8].axhline(-2.0, color='red', linestyle='--')
-    axes[8].set_title("Mean Z")
+    for name in est_names:
+        valid_phases = []
+        
+        # Safely extract phase values for each estimator individually
+        for r in metrics.get("phase_results", []):
+            if r and isinstance(r, dict):
+                est_res = r.get(name)
+                if est_res and isinstance(est_res, dict):
+                    phase = est_res.get("phase")
+                    if phase is not None:
+                        valid_phases.append(phase)
+                        
+        # Ensure there are enough points to compute a difference
+        if len(valid_phases) > 1:
+            valid_phases = np.array(valid_phases)
+            dp = np.diff(np.unwrap(valid_phases))
+            
+            # Wrap the x-axis phase to the [0, 2π) range to track cycle position
+            x_phase = np.mod(valid_phases[:-1], 2 * np.pi)
+            
+            # Use scatter instead of plot because phase values do not increase monotonically
+            axes[7].scatter(x_phase, dp, s=5, alpha=0.5, label=f"{name} Delta Phase")
 
-    # Anomaly Std Z
-    axes[9].plot(timestamps, sigma_zs)
-    axes[9].axhline(2.0, color='red', linestyle='--')
-    axes[9].set_title("Std Z")
-
-    # Anomaly Median Z
-    axes[10].plot(timestamps, median_zs)
-    axes[10].axhline(2.0, color='red', linestyle='--')
-    axes[10].axhline(-2.0, color='red', linestyle='--')
-    axes[10].set_title("Median Z")
-
-    # Anomaly MAD Z
-    axes[11].plot(timestamps, mad_zs)
-    axes[11].axhline(2.0, color='red', linestyle='--')
-    axes[11].set_title("MAD Z")
-
-    # Mean - Median Difference (Skew)
-    axes[12].plot(timestamps, diff_mean_medians)
-    axes[12].axhline(1.0, color='red', linestyle='--')
-    axes[12].axhline(-1.0, color='red', linestyle='--')
-    axes[12].set_title("Mean - Median Diff")
-
-    # Std - MAD Difference (Outliers)
-    axes[13].plot(timestamps, diff_std_mads)
-    axes[13].axhline(1.0, color='red', linestyle='--')
-    axes[13].set_title("Std - MAD Diff")
-         
-    axes[12].set_xlabel("Time (s)")
-    axes[13].set_xlabel("Time (s)")
+    axes[7].set_title("Delta Phase vs Phase")
+    axes[7].set_xlabel("Phase (radians)")
+    axes[7].set_ylabel("Delta Phase (radians)")
+    axes[7].set_xlim(0, 2 * np.pi)
+    try_legend(axes[7])
 
     plt.tight_layout()
     plt.savefig(os.path.join(storage_path, "acquisition_metrics.png"))
@@ -220,7 +226,7 @@ def plot_metrics(metrics):
 
 def main():
     with SystemController() as controller:
-        metrics = initialize_metrics()
+        metrics = initialise_metrics()
         setup_hardware(controller)
         data_manager.configure(storage_path)
 

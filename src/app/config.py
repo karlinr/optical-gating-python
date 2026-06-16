@@ -23,7 +23,6 @@ class ExperimentConfig:
 # Timing box and pin mapping
 class TimingBox:
     # Karlin tempnote:
-    # For my 
     # Desktop I use PORT = 'COM5' and EMULATOR_PORT = 'COM6'
     # Laptop I use PORT = 'COM4' and EMULATOR_PORT = 'COM7'
     # SPIM I use PORT = 'COM3'
@@ -70,7 +69,7 @@ class Cameras:
         serial="28600723",
         exposure_us=1000,
         gain=0.0,
-        downsample="XI_DWN_2x2",
+        downsample=None,#"XI_DWN_2x2",
         roi=(828, 418, 484, 488),
         trigger_pin=2, # Physical GPIO pin on the camera
         box_pins=[
@@ -102,12 +101,13 @@ class Gating:
     # Methods to estimate and predict phase
     # Options for PHASE_SOURCE: SAD or MLE
     # Options for PREDICTION_METHOD: BARRIER or KALMAN
-    PHASE_SOURCE = "MLE_ANOMALY"
+    PHASE_SOURCE = "MLE"
     PREDICTION_METHOD = "KALMAN"
 
     # Whether we should log all phase estimates or just the PHASE_SOURCE one
-    ENABLED_ESTIMATORS = ["SAD","MLE_ANOMALY"]
+    ENABLED_ESTIMATORS = ["SAD","MLE"]
 
+    # Estimation
     # SAD parameters
     NUM_EXTRA_REF_FRAMES = 2
     MIN_PERIOD = 5
@@ -116,11 +116,20 @@ class Gating:
     MIN_HEART_RATE_HZ = 0.5
 
     # MLE parameters
-    MLE_BOOTSTRAP_FRAMES = 1000
-    MLE_BINS = 38
-    MLE_MIN_NOISE = 5
-    MLE_FIT_POINTS = 1
+    MLE_BOOTSTRAP_FRAMES = 2000
+    MLE_BINS = 48
+    MLE_MIN_NOISE = 1.0
+    MLE_FIT_POINTS = 2
+    MLE_SMOOTHING_SIGMA = 1
+    MLE_PHASE_SMOOTHING_SIGMA = 5
+    MLE_MODEL_DRIFT_CORRECT = True
 
+    # Drift correction
+    DRIFT_CORRECT = True
+    DRIFT_MAX_SEARCH = 1
+    DRIFT_INITIAL_SEARCH = 5
+    
+    # Prediction
     # Barrier prediction parameters
     PHASE_HISTORY_LENGTH = 100
     MIN_FRAMES_FOR_PREDICTION = 3
@@ -132,16 +141,12 @@ class Gating:
     KALMAN_PROCESS_NOISE = 0.0001
 
     # Prediction parameters
-    PREDICTION_LATENCY = 0.15#0.05
-    EXTRAPOLATION_FACTOR = 2.5#1.5
+    PREDICTION_LATENCY = 0.05
+    EXTRAPOLATION_FACTOR = 1.5
 
-    # Drift correction parameters
-    DRIFT_CORRECT = True
-    DRIFT_MAX_SEARCH = 2
-    DRIFT_INITIAL_SEARCH = 5
 
 class Config:
-    EMULATE_CAMERA = True  # Whether to use the camera emulator or real hardware
+    EMULATE_CAMERA = True
 
     ExperimentConfig = ExperimentConfig
     TimingBox = TimingBox

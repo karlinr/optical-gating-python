@@ -43,10 +43,10 @@ def chi_sq(test_frame, binned_frames, noise_est):
         acc = 0.0
         for x in range(w):
             for y in range(h):
-                obs = test_frame[x, y]
-                exp = binned_frames[i, x, y]
-                var = noise_est[i, x, y]
-                acc += ((obs - exp) ** 2 / var)# + np.log(var)
+                obs = float(test_frame[x, y])
+                exp = float(binned_frames[i, x, y])
+                var = float(noise_est[i, x, y])
+                acc += ((obs - exp) ** 2 / var) #+ np.log(var)
         chi_sq_terms[i] = acc
 
     return chi_sq_terms
@@ -59,28 +59,49 @@ def sad_with_references(test_frame, reference_stack):
     """
     n_refs, w, h = reference_stack.shape
 
-    sad_scores = np.zeros(n_refs, dtype=np.int64)
+    sad_scores = np.zeros(n_refs, dtype=np.float64)
 
     for i in prange(n_refs):
-        acc = np.int64(0)
+        acc = 0.0
         for x in range(w):
             for y in range(h):
-                obs = np.int32(test_frame[x, y])
-                ref = np.int32(reference_stack[i, x, y])
+                obs = float(test_frame[x, y])
+                ref = float(reference_stack[i, x, y])
                 acc += abs(obs - ref)
         sad_scores[i] = acc
         
     return sad_scores
 
-def sad_with_reference(test_frame, reference):
+@njit(cache=True, parallel=True)
+def compute_sad_grid(frame, reference, initial_dx, initial_dy, eval_radius, margin_x, margin_y):
     """
-    Compute SAD between a test frame and a single reference frame.
+    Calculate the grid of SAD values for a given frame and reference
     """
-    return sad_with_references(test_frame, reference[np.newaxis, ...])[0]
+    w, h = frame.shape[:2]
+    grid_size = 2 * eval_radius + 1
+    sad_grid = np.zeros((grid_size, grid_size), dtype=np.float64)
+    
+    # Slice the reference centre
+    ref_centre = reference[margin_x : w - margin_x, margin_y : h - margin_y]
+    sub_w, sub_h = ref_centre.shape[:2]
 
-_warmup_frame = np.zeros((512, 512), dtype=np.uint16)
-_warmup_stack = np.zeros((2, 512, 512), dtype=np.uint16)
-_warmup_floats = np.zeros((2, 512, 512), dtype=np.float32)
+    for s_dx in prange(-eval_radius, eval_radius + 1):
+        for s_dy in range(-eval_radius, eval_radius + 1):
+            dx = initial_dx + s_dx
+            dy = initial_dy + s_dy
 
-sad_with_references(_warmup_frame, _warmup_stack)
-chi_sq(_warmup_frame, _warmup_floats, _warmup_floats)
+            # Calculate the top-left starting pixel position on the live frame
+            live_start_x = margin_x - dx
+            live_start_y = margin_y - dy
+            
+            acc = 0.0
+            
+            for x in range(sub_w):
+                for y in range(sub_h):
+                    obs = float(frame[live_start_x + x, live_start_y + y])
+                    ref = float(ref_centre[x, y])
+                    acc += abs(obs - ref)
+            
+            sad_grid[s_dx + eval_radius, s_dy + eval_radius] = acc
+
+    return sad_grid

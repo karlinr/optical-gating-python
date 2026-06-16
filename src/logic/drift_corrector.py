@@ -1,8 +1,53 @@
 import numpy as np
-from scipy.ndimage import shift
 from app.config import Config
 from loguru import logger
-from logic.utils import sad_with_reference
+from logic.utils import compute_sad_grid
+from numba import njit, prange
+
+# TODO: Right now every estimator method initiates and runs a seperate drift corrector
+# Strictly speaking this is correct as we want to compare how each estimator performs but is slow and inneficient.
+# We either need to consolidate and just use the SAD-based drift correction for all estimators (cascaded down)
+# Or make this more efficient either using Jonny's SAD code or by using a faster method
+
+import numpy as np
+
+@njit(cache=True, parallel=True)
+def shift_frame(frame, dx, dy):
+    """
+    Bilinear frame-shift
+    """
+    idx = int(np.floor(dx))
+    idy = int(np.floor(dy))
+    fdx = dx - idx
+    fdy = dy - idy
+
+    r, c = frame.shape
+    pad_x = max(abs(idx), 0) + 2
+    pad_y = max(abs(idy), 0) + 2
+    
+    padded = np.zeros((r + 2 * pad_x, c + 2 * pad_y), dtype=frame.dtype)
+    padded[pad_x:pad_x+r, pad_y:pad_y+c] = frame
+
+    x0 = pad_x - idx
+    y0 = pad_y - idy
+
+    w00 = (1.0 - fdx) * (1.0 - fdy)
+    w10 = fdx * (1.0 - fdy)
+    w01 = (1.0 - fdx) * fdy
+    w11 = fdx * fdy
+
+    out = np.empty((r, c), dtype=np.float32)
+
+    # Multi-threaded outer loop execution
+    for i in prange(r):
+        px = x0 + i
+        for j in range(c):
+            py = y0 + j
+            out[i, j] = (w00 * padded[px, py] +
+                         w10 * padded[px - 1, py] +
+                         w01 * padded[px, py - 1] +
+                         w11 * padded[px - 1, py - 1])
+    return out
 
 class DriftCorrector:
     """
@@ -12,6 +57,8 @@ class DriftCorrector:
         self.search_radius = Config.Gating.DRIFT_INITIAL_SEARCH
         self.drift_x = 0.0
         self.drift_y = 0.0
+        self.mx = int(np.ceil(abs(self.drift_x))) + 1
+        self.my = int(np.ceil(abs(self.drift_y))) + 1
 
     def add_sample(self, frame, best_match=None):
         if not Config.Gating.DRIFT_CORRECT:
@@ -31,28 +78,14 @@ class DriftCorrector:
         search_margin_y = max(abs(initial_dy), self.search_radius) + 2
 
         if search_margin_x >= min(w, h) // 2 or search_margin_y >= min(w, h) // 2:
-            logger.error(f"Drift tracking bounds ({search_margin_x}, {search_margin_y}) exceed image center. Resetting tracker.")
+            logger.error(f"Drift tracking bounds ({search_margin_x}, {search_margin_y}) exceed image centre. Resetting tracker.")
             self.drift_x, self.drift_y = 0.0, 0.0
             return 0.0, 0.0
 
-        ref_center = reference[search_margin_x : w - search_margin_x, search_margin_y : h - search_margin_y]
-
         eval_radius = self.search_radius + 1
-        grid_size = 2 * eval_radius + 1
-        sad_grid = np.empty((grid_size, grid_size))
         offset = eval_radius
 
-        for s_dx in range(-eval_radius, eval_radius + 1):
-            for s_dy in range(-eval_radius, eval_radius + 1):
-                dx = initial_dx + s_dx
-                dy = initial_dy + s_dy
-
-                live_slice = frame[
-                    search_margin_x - dx : w - search_margin_x - dx,
-                    search_margin_y - dy : h - search_margin_y - dy,
-                ]
-                
-                sad_grid[s_dx + offset, s_dy + offset] = sad_with_reference(live_slice, ref_center)
+        sad_grid = compute_sad_grid(frame, reference, initial_dx, initial_dy, eval_radius, search_margin_x, search_margin_y)
 
         inner_grid = sad_grid[1:-1, 1:-1]
         min_inner_idx = np.unravel_index(np.argmin(inner_grid), inner_grid.shape)
@@ -63,14 +96,14 @@ class DriftCorrector:
         best_dx = initial_dx + (best_grid_x - offset)
         best_dy = initial_dy + (best_grid_y - offset)
 
-        center = sad_grid[best_grid_x, best_grid_y]
-        left   = sad_grid[best_grid_x - 1, best_grid_y]
-        right  = sad_grid[best_grid_x + 1, best_grid_y]
-        up     = sad_grid[best_grid_x, best_grid_y - 1]
-        down   = sad_grid[best_grid_x, best_grid_y + 1]
+        centre = sad_grid[best_grid_x, best_grid_y]
+        left = sad_grid[best_grid_x - 1, best_grid_y]
+        right = sad_grid[best_grid_x + 1, best_grid_y]
+        up = sad_grid[best_grid_x, best_grid_y - 1]
+        down = sad_grid[best_grid_x, best_grid_y + 1]
 
-        denom_x = 2.0 * (left + right - 2.0 * center)
-        denom_y = 2.0 * (up + down - 2.0 * center)
+        denom_x = 2.0 * (left + right - 2.0 * centre)
+        denom_y = 2.0 * (up + down - 2.0 * centre)
 
         sub_dx = (left - right) / denom_x if abs(denom_x) > 1e-6 else 0.0
         sub_dy = (up - down)   / denom_y if abs(denom_y) > 1e-6 else 0.0
@@ -80,21 +113,19 @@ class DriftCorrector:
 
         self.search_radius = Config.Gating.DRIFT_MAX_SEARCH
 
+        self.mx = int(np.ceil(abs(self.drift_x))) + 1
+        self.my = int(np.ceil(abs(self.drift_y))) + 1
+
         return self.drift_x, self.drift_y
 
     def adjust_reference_array(self, reference, drift=None):
         if not Config.Gating.DRIFT_CORRECT:
             return reference
 
-        dx = drift[0] if drift is not None else self.drift_x
-        dy = drift[1] if drift is not None else self.drift_y
-        mx = int(np.ceil(abs(dx))) + 1
-        my = int(np.ceil(abs(dy))) + 1
-
         if reference.ndim == 3:
-            return reference[:, mx:-mx, my:-my]
+            return reference[:, self.mx:-self.mx, self.my:-self.my]
         else:
-            return reference[mx:-mx, my:-my]
+            return reference[self.mx:-self.mx, self.my:-self.my]
 
     def adjust_live_frame(self, frame, drift=None):
         if not Config.Gating.DRIFT_CORRECT:
@@ -102,8 +133,6 @@ class DriftCorrector:
 
         dx = drift[0] if drift is not None else self.drift_x
         dy = drift[1] if drift is not None else self.drift_y
-        mx = int(np.ceil(abs(dx))) + 1
-        my = int(np.ceil(abs(dy))) + 1
 
-        stabilized = shift(frame, shift=(dx, dy), order=1, mode="constant", cval=0.0)
-        return stabilized[mx:-mx, my:-my]
+        stabilised = shift_frame(frame, dx, dy)
+        return stabilised[self.mx:-self.mx, self.my:-self.my]

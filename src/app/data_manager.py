@@ -1,4 +1,3 @@
-# src/app/data_manager.py
 import os
 import numpy as np
 import threading
