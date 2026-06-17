@@ -20,6 +20,7 @@ class MLEEstimator(PhaseEstimator):
         self.frame_history = []
         self.target_phase = None
         self.barrier_phase = None
+        self.log_variance_terms = None
         
         self.drift_corrector = DriftCorrector()
         self._last_best_idx = None
@@ -112,6 +113,9 @@ class MLEEstimator(PhaseEstimator):
             self.drift_corrector.mx = int(np.ceil(abs(last_frame_drift_x))) + 1
             self.drift_corrector.my = int(np.ceil(abs(last_frame_drift_y))) + 1
 
+        # Compute log variance terms for later use in chi-squared calculations
+        self.log_variance_terms = np.sum(np.log(self.noise_estimate), axis=(1, 2))
+
         self._ready = True
         self.frame_history = []
 
@@ -122,7 +126,7 @@ class MLEEstimator(PhaseEstimator):
         corrected_noise = self.drift_corrector.adjust_reference_array(self.noise_estimate)
         corrected_frame = self.drift_corrector.adjust_live_frame(frame)
 
-        scores = chi_sq(corrected_frame, corrected_binned, corrected_noise)
+        scores = chi_sq(corrected_frame, corrected_binned, corrected_noise) + self.log_variance_terms
         n_bins = len(scores)
         best_idx = np.argmin(scores)
         self._last_best_idx = best_idx
@@ -172,7 +176,7 @@ class MLEEstimator(PhaseEstimator):
             "target_phase": self.target_phase,
             "barrier_phase": self.barrier_phase,
             "metrics": {
-                "reduced_chi_squared": reduced_chi_squared,
+                "reduced_chi_squared": reduced_chi_squared - self.log_variance_terms[best_idx] / corrected_frame.size,
                 "uncertainty_estimate": uncertainty_radians,
                 "best_index": best_idx,
                 "reference_period": n_bins,

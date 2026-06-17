@@ -48,7 +48,7 @@ def chi_sq(test_frame, binned_frames, noise_est):
                 obs = float(test_frame[x, y])
                 exp = float(binned_frames[i, x, y])
                 var = float(noise_est[i, x, y])
-                acc += ((obs - exp) ** 2 / var) + np.log(var)
+                acc += ((obs - exp) ** 2 / var)
         chi_sq_terms[i] = acc
 
     return chi_sq_terms

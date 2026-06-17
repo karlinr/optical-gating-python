@@ -4,7 +4,7 @@ from loguru import logger
 from app.data_manager import data_manager
 import os
 import numpy as np
-
+import pickle
 
 from interfaces.system import SystemController
 from app.config import Config
@@ -324,6 +324,12 @@ def main():
             
             trigger_controller = TriggerDecider()
             run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, metrics, iterations=3000)
+
+
+            metrics_save_path = os.path.join(storage_path, "metrics.pkl")
+            with open(metrics_save_path, "wb") as f:
+                pickle.dump(metrics, f)
+            logger.info(f"Metrics saved to {metrics_save_path}")
 
             logger.info("Acquisition loop finished. Rendering metrics...")
             plot_metrics(metrics)
