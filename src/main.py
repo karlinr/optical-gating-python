@@ -223,6 +223,90 @@ def plot_metrics(metrics):
     plt.savefig(os.path.join(storage_path, "acquisition_metrics.png"))
     plt.show()
 
+def plot_peak_locking_diagnostics(metrics):
+    """
+    Generates diagnostic plots to detect peak locking in temporal sub-bin 
+    phase estimation and spatial drift tracking.
+    """
+    import numpy as np
+    import matplotlib.pyplot as plt
+    
+    # Identify all active estimators (excluding the 'ACTIVE' metadata block)
+    est_names = sorted(list(set(name for r in metrics["phase_results"] for name in r if name != "ACTIVE")))
+    if not est_names:
+        logger.warning("No estimator metrics found for peak locking analysis.")
+        return
+
+    fig, axs = plt.subplots(len(est_names), 3, figsize=(18, 5 * len(est_names)))
+    
+    # Ensure axes matrix is 2D even if only one estimator is present
+    if len(est_names) == 1:
+        axs = np.expand_dims(axs, axis=0)
+
+    for idx, name in enumerate(est_names):
+        vertex_offsets = []
+        drift_xs = []
+        drift_ys = []
+        
+        for r in metrics.get("phase_results", []):
+            if r and isinstance(r, dict):
+                est_res = r.get(name)
+                if est_res and isinstance(est_res, dict):
+                    m = est_res.get("metrics", {})
+                    v_off = m.get("vertex_offset")
+                    dx = m.get("drift_x")
+                    dy = m.get("drift_y")
+                    
+                    if v_off is not None:
+                        vertex_offsets.append(v_off)
+                    if dx is not None:
+                        drift_xs.append(dx)
+                    if dy is not None:
+                        drift_ys.append(dy)
+
+        # 1. Histogram of Phase Sub-bin Vertex Offsets
+        if vertex_offsets:
+            axs[idx, 0].hist(vertex_offsets, bins=50, range=(-1.0, 1.0), alpha=0.75, color='royalblue', edgecolor='black')
+            axs[idx, 0].axvline(0.0, color='crimson', linestyle='--', linewidth=1.5)
+            axs[idx, 0].set_title(f"{name} - Phase Sub-bin Offsets")
+            axs[idx, 0].set_xlabel("Vertex Offset (bins)")
+            axs[idx, 0].set_ylabel("Count")
+            axs[idx, 0].grid(True, alpha=0.3)
+            
+        # 2. Histogram of Fractional Spatial Drift
+        if drift_xs and drift_ys:
+            # Map continuous drift coordinates to their fractional component [-0.5, 0.5] relative to closest integer
+            frac_x = np.array(drift_xs) - np.round(drift_xs)
+            frac_y = np.array(drift_ys) - np.round(drift_ys)
+            
+            axs[idx, 1].hist(frac_x, bins=50, range=(-0.5, 0.5), alpha=0.5, label='Drift X Frac', color='teal')
+            axs[idx, 1].hist(frac_y, bins=50, range=(-0.5, 0.5), alpha=0.5, label='Drift Y Frac', color='darkorange')
+            axs[idx, 1].axvline(0.0, color='crimson', linestyle='--', linewidth=1.5)
+            axs[idx, 1].set_title(f"{name} - Fractional Spatial Drift")
+            axs[idx, 1].set_xlabel("Fractional Pixel Error")
+            axs[idx, 1].set_ylabel("Count")
+            axs[idx, 1].legend()
+            axs[idx, 1].grid(True, alpha=0.3)
+            
+            # 3. 2D Scatter Plot of Fractional Spatial Drift
+            axs[idx, 2].scatter(frac_x, frac_y, alpha=0.2, s=6, color='purple')
+            axs[idx, 2].axhline(0.0, color='black', linestyle=':', alpha=0.4)
+            axs[idx, 2].axvline(0.0, color='black', linestyle=':', alpha=0.4)
+            axs[idx, 2].set_title(f"{name} - 2D Fractional Drift")
+            axs[idx, 2].set_xlabel("Fractional X")
+            axs[idx, 2].set_ylabel("Fractional Y")
+            axs[idx, 2].set_xlim(-0.5, 0.5)
+            axs[idx, 2].set_ylim(-0.5, 0.5)
+            axs[idx, 2].set_aspect('equal')
+
+    plt.tight_layout()
+    # Save alongside the default metrics plot
+    try:
+        import os
+        plt.savefig(os.path.join(storage_path, "peak_locking_diagnostics.png"), dpi=150)
+    except Exception as e:
+        logger.error(f"Could not save peak locking plot: {e}")
+    plt.show()
 
 def main():
     with SystemController() as controller:
@@ -243,6 +327,7 @@ def main():
 
             logger.info("Acquisition loop finished. Rendering metrics...")
             plot_metrics(metrics)
+            plot_peak_locking_diagnostics(metrics)
         finally:
             data_manager.close()
 

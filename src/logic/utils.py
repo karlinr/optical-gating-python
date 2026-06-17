@@ -24,6 +24,8 @@ def v_fitting(y_1, y_2, y_3):
     # Calculate vertex coordinates
     x = 0.5 * (y_1 - y_3) / denominator
     y = y_2 - abs(x) * denominator
+
+    x = np.clip(x, -0.5, 0.5)
     
     return x, y
 
@@ -46,7 +48,7 @@ def chi_sq(test_frame, binned_frames, noise_est):
                 obs = float(test_frame[x, y])
                 exp = float(binned_frames[i, x, y])
                 var = float(noise_est[i, x, y])
-                acc += ((obs - exp) ** 2 / var) #+ np.log(var)
+                acc += ((obs - exp) ** 2 / var) + np.log(var)
         chi_sq_terms[i] = acc
 
     return chi_sq_terms

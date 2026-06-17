@@ -74,17 +74,20 @@ class MLEEstimator(PhaseEstimator):
 
         clean_history = self.frame_history[:n_bins * f_per_bin]
         
-        # Shift frames based on drift
-        shifted_frames = []
-        for h in clean_history:
-            frame, phase, dx, dy = h
-            if Config.Gating.DRIFT_CORRECT and Config.Gating.MLE_MODEL_DRIFT_CORRECT:
-                shifted_f = shift_frame(frame, dx, dy)
-            else:
-                shifted_f = frame
-            shifted_frames.append(shifted_f)
+        if Config.Gating.MLE_MODEL_DRIFT_CORRECT:
+            # Shift frames based on drift
+            shifted_frames = []
+            for h in clean_history:
+                frame, phase, dx, dy = h
+                if Config.Gating.DRIFT_CORRECT and Config.Gating.MLE_MODEL_DRIFT_CORRECT:
+                    shifted_f = shift_frame(frame, dx, dy)
+                else:
+                    shifted_f = frame
+                shifted_frames.append(shifted_f)
 
-        raw_frames = np.array(shifted_frames, dtype=np.float32)
+            raw_frames = np.array(shifted_frames, dtype=np.float32)
+        else:
+            raw_frames = np.array([h[0] for h in clean_history], dtype=np.float32)
 
         block = raw_frames.reshape(n_bins, f_per_bin, *raw_frames.shape[1:])
 

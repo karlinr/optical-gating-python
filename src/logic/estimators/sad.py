@@ -215,7 +215,7 @@ class SADEstimator(PhaseEstimator):
             "metrics": {
                 "sad_score": score,
                 "best_index": best_idx - Config.Gating.NUM_EXTRA_REF_FRAMES,
-                "offset": offset,
+                "vertex_offset": offset,
                 "reference_period": self.reference_period,
                 "scores": scores,
                 "drift_x": self.drift_corrector.drift_x,
