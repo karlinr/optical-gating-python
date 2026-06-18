@@ -149,6 +149,8 @@ class MLEEstimator(PhaseEstimator):
                 minimized_score = scores[best_idx]
 
             reduced_chi_squared = minimized_score / corrected_frame.size
+
+            vertex_offset = np.clip(vertex_offset, -0.5, 0.5)
         except (np.linalg.LinAlgError, TypeError):
             vertex_offset = 0.0
             a = 1.0

@@ -18,7 +18,9 @@ class ExperimentConfig:
     # Logging settings
     LOGGING_LEVEL = "INFO"
     SAVE_BRIGHTFIELD_FRAMES = False
-    SAVE_FLUORESCENCE_FRAMES = False
+    SAVE_FLUORESCENCE_FRAMES = True
+
+    ITERATIONS = 5000
 
 # Timing box and pin mapping
 class TimingBox:
@@ -116,12 +118,12 @@ class Gating:
     MIN_HEART_RATE_HZ = 0.5
 
     # MLE parameters
-    MLE_BOOTSTRAP_FRAMES = 2000
-    MLE_BINS = 48
-    MLE_MIN_NOISE = 1.0
-    MLE_FIT_POINTS = 2
-    MLE_SMOOTHING_SIGMA = 1
-    MLE_PHASE_SMOOTHING_SIGMA = 5
+    MLE_BOOTSTRAP_FRAMES = 1200
+    MLE_BINS = 40
+    MLE_MIN_NOISE = 1
+    MLE_FIT_POINTS = 1
+    MLE_SMOOTHING_SIGMA = 0
+    MLE_PHASE_SMOOTHING_SIGMA = 0
     MLE_MODEL_DRIFT_CORRECT = True
 
     # Drift correction

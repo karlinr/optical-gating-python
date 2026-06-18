@@ -323,7 +323,7 @@ def main():
                 raise ValueError(f"Unsupported prediction method: {pred_method}")
             
             trigger_controller = TriggerDecider()
-            run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, metrics, iterations=3000)
+            run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigger_controller, metrics, iterations=Config.ExperimentConfig.ITERATIONS)
 
 
             metrics_save_path = os.path.join(storage_path, "metrics.pkl")
