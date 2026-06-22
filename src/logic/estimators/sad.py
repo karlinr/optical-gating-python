@@ -3,7 +3,9 @@ import numpy as np
 
 from logic.drift_corrector import DriftCorrector
 from logic.estimators.base import register_estimator, PhaseEstimator
-from logic.utils import v_fitting, chi_sq, sad_with_references 
+from utils.metrics import sad_with_references
+from utils.fitters import v_fitting
+from utils.fitters import estimate_phase_from_scores
 from app.config import Config
 from app.data_manager import data_manager
 
@@ -35,13 +37,13 @@ class SADEstimator(PhaseEstimator):
             
             self.frame_history.append((frame, timestamp))
             ref_buffer_duration = self.frame_history[-1][1] - self.frame_history[0][1]
-            max_duration = 1.0 / Config.Gating.MIN_HEART_RATE_HZ
+            max_duration = 1.0 / Config.Gating.SAD_MIN_HEART_RATE_HZ
 
             while ref_buffer_duration > max_duration:
                 self.frame_history.pop(0)
                 ref_buffer_duration = self.frame_history[-1][1] - self.frame_history[0][1]
 
-            if len(self.frame_history) > Config.Gating.MIN_PERIOD:
+            if len(self.frame_history) > Config.Gating.SAD_MIN_PERIOD:
                 self.build_model()
 
         if self.is_ready():
@@ -92,15 +94,15 @@ class SADEstimator(PhaseEstimator):
             self.period_history.append(period)
 
         # Stability check: Requires 5 + 2*padding frames of history
-        history_stable = len(self.period_history) >= (5 + (2 * Config.Gating.NUM_EXTRA_REF_FRAMES))
+        history_stable = len(self.period_history) >= (5 + (2 * Config.Gating.SAD_NUM_EXTRA_REF_FRAMES))
 
         if period != -1 and period > 6 and history_stable:
-            period_to_use = self.period_history[-1 - Config.Gating.NUM_EXTRA_REF_FRAMES]
+            period_to_use = self.period_history[-1 - Config.Gating.SAD_NUM_EXTRA_REF_FRAMES]
             
-            if (len(self.period_history) - 1 - Config.Gating.NUM_EXTRA_REF_FRAMES) <= 0 or period_to_use <= 6:
+            if (len(self.period_history) - 1 - Config.Gating.SAD_NUM_EXTRA_REF_FRAMES) <= 0 or period_to_use <= 6:
                 return None, None, None
                 
-            num_refs = int(period_to_use + 1) + (2 * Config.Gating.NUM_EXTRA_REF_FRAMES)
+            num_refs = int(period_to_use + 1) + (2 * Config.Gating.SAD_NUM_EXTRA_REF_FRAMES)
             
             start = len(past_frames) - num_refs
             stop = len(past_frames)
@@ -120,11 +122,11 @@ class SADEstimator(PhaseEstimator):
         stage = 1
         got = False
 
-        for d in range(Config.Gating.MIN_PERIOD, diffs.size + 1):
+        for d in range(Config.Gating.SAD_MIN_PERIOD, diffs.size + 1):
             score = diffs[-d]
             
-            lower_thresh = min_score + (max_score - min_score) * Config.Gating.LOWER_THRESHOLD_FACTOR
-            upper_thresh = min_score + (max_score - min_score) * Config.Gating.UPPER_THRESHOLD_FACTOR
+            lower_thresh = min_score + (max_score - min_score) * Config.Gating.SAD_LOWER_THRESHOLD_FACTOR
+            upper_thresh = min_score + (max_score - min_score) * Config.Gating.SAD_UPPER_THRESHOLD_FACTOR
 
             if score < lower_thresh and stage == 1:
                 stage = 2
@@ -159,11 +161,11 @@ class SADEstimator(PhaseEstimator):
     def _pick_frames(self):
         """Automatically identify target and barrier frames."""
         total_frames = len(self.reference_frames)
-        stop_index = total_frames - Config.Gating.NUM_EXTRA_REF_FRAMES
+        stop_index = total_frames - Config.Gating.SAD_NUM_EXTRA_REF_FRAMES
 
         # Calculate deltas between consecutive frames in the sequence
-        f1s = self.reference_frames[Config.Gating.NUM_EXTRA_REF_FRAMES : stop_index]
-        f2s = self.reference_frames[Config.Gating.NUM_EXTRA_REF_FRAMES + 1 : stop_index + 1]
+        f1s = self.reference_frames[Config.Gating.SAD_NUM_EXTRA_REF_FRAMES : stop_index]
+        f2s = self.reference_frames[Config.Gating.SAD_NUM_EXTRA_REF_FRAMES + 1 : stop_index + 1]
         deltas = np.sum(np.abs(f1s.astype(np.int32) - f2s.astype(np.int32)), axis=(1, 2))
 
         # Find the frame with the maximum delta (largest change)
@@ -199,11 +201,14 @@ class SADEstimator(PhaseEstimator):
 
         scores = sad_with_references(corrected_frame, corrected_refs)
         
-        best_idx = np.argmin(scores[Config.Gating.NUM_EXTRA_REF_FRAMES : -Config.Gating.NUM_EXTRA_REF_FRAMES]) + Config.Gating.NUM_EXTRA_REF_FRAMES
+        best_idx = np.argmin(scores[Config.Gating.SAD_NUM_EXTRA_REF_FRAMES : -Config.Gating.SAD_NUM_EXTRA_REF_FRAMES]) + Config.Gating.SAD_NUM_EXTRA_REF_FRAMES
         self._last_best_idx = best_idx  # Store for next frame's tracking
         
-        offset, score = v_fitting(scores[best_idx - 1], scores[best_idx], scores[best_idx + 1])
-        phase = ((best_idx + offset - Config.Gating.NUM_EXTRA_REF_FRAMES) / self.reference_period) * 2 * np.pi
+        fit_res = estimate_phase_from_scores(scores, best_idx, Config.Gating.SAD_FITTER, Config.Gating.SAD_FIT_POINTS, poly_degree=Config.Gating.SAD_POLY_DEGREE, reference_period=self.reference_period, idx_offset=Config.Gating.SAD_NUM_EXTRA_REF_FRAMES
+        )
+        phase = fit_res["phase"]
+        offset = fit_res["vertex_offset"]
+        score = fit_res["minimized_score"]
 
         current_best_match = self.reference_frames[best_idx]
         self.drift_corrector.add_sample(frame, best_match=current_best_match)
@@ -214,7 +219,7 @@ class SADEstimator(PhaseEstimator):
             "barrier_phase": self.barrier_phase,
             "metrics": {
                 "sad_score": score,
-                "best_index": best_idx - Config.Gating.NUM_EXTRA_REF_FRAMES,
+                "best_index": best_idx - Config.Gating.SAD_NUM_EXTRA_REF_FRAMES,
                 "vertex_offset": offset,
                 "reference_period": self.reference_period,
                 "scores": scores,

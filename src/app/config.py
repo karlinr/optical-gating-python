@@ -17,10 +17,10 @@ class ExperimentConfig:
 
     # Logging settings
     LOGGING_LEVEL = "INFO"
-    SAVE_BRIGHTFIELD_FRAMES = False
-    SAVE_FLUORESCENCE_FRAMES = True
+    SAVE_BRIGHTFIELD_FRAMES = True
+    SAVE_FLUORESCENCE_FRAMES = False
 
-    ITERATIONS = 5000
+    ITERATIONS = 3000
 
 # Timing box and pin mapping
 class TimingBox:
@@ -110,21 +110,37 @@ class Gating:
     ENABLED_ESTIMATORS = ["SAD","MLE"]
 
     # Estimation
+    """
+    FITTER options:
+    - V_3P: V-fit with 3 points
+    - V_NP: V-fit with N-points
+    - U_3P: Parabolic fit with 3 points
+    - U_NP: Parabolic fit with N-points
+    - POLY_NP: Polynomial fit with N-points and specified degree
+    - MINIMA: Use the discrete minimum without interpolation
+    """
     # SAD parameters
-    NUM_EXTRA_REF_FRAMES = 2
-    MIN_PERIOD = 5
-    LOWER_THRESHOLD_FACTOR = 0.5
-    UPPER_THRESHOLD_FACTOR = 0.75
-    MIN_HEART_RATE_HZ = 0.5
+
+    SAD_NUM_EXTRA_REF_FRAMES = 2
+    SAD_MIN_PERIOD = 5
+    SAD_LOWER_THRESHOLD_FACTOR = 0.5
+    SAD_UPPER_THRESHOLD_FACTOR = 0.75
+    SAD_MIN_HEART_RATE_HZ = 0.5
+    # V_3P, V_NP, U_3P, U_NP, POLY_NP, MINIMA
+    SAD_FITTER = "V_NP"
+    SAD_FIT_POINTS = 2
+    SAD_POLY_DEGREE = 1
 
     # MLE parameters
-    MLE_BOOTSTRAP_FRAMES = 1200
-    MLE_BINS = 40
+    MLE_BOOTSTRAP_FRAMES = 1500
+    MLE_BINS = 48
     MLE_MIN_NOISE = 1
-    MLE_FIT_POINTS = 1
     MLE_SMOOTHING_SIGMA = 0
     MLE_PHASE_SMOOTHING_SIGMA = 0
     MLE_MODEL_DRIFT_CORRECT = True
+    MLE_FITTER = "MINIMA"
+    MLE_FIT_POINTS = 1
+    MLE_POLY_DEGREE = 4
 
     # Drift correction
     DRIFT_CORRECT = True
@@ -132,6 +148,8 @@ class Gating:
     DRIFT_INITIAL_SEARCH = 5
     
     # Prediction
+    PREDICTION_LATENCY = 0.05
+    EXTRAPOLATION_FACTOR = 1.5
     # Barrier prediction parameters
     PHASE_HISTORY_LENGTH = 100
     MIN_FRAMES_FOR_PREDICTION = 3
@@ -141,11 +159,6 @@ class Gating:
     # Kalman filter parameters
     KALMAN_MEASUREMENT_NOISE = 0.0001
     KALMAN_PROCESS_NOISE = 0.0001
-
-    # Prediction parameters
-    PREDICTION_LATENCY = 0.05
-    EXTRAPOLATION_FACTOR = 1.5
-
 
 class Config:
     EMULATE_CAMERA = True

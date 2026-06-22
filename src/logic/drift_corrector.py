@@ -1,15 +1,13 @@
 import numpy as np
 from app.config import Config
 from loguru import logger
-from logic.utils import compute_sad_grid
+from utils.metrics import compute_sad_grid
 from numba import njit, prange
 
 # TODO: Right now every estimator method initiates and runs a seperate drift corrector
 # Strictly speaking this is correct as we want to compare how each estimator performs but is slow and inneficient.
 # We either need to consolidate and just use the SAD-based drift correction for all estimators (cascaded down)
 # Or make this more efficient either using Jonny's SAD code or by using a faster method
-
-import numpy as np
 
 @njit(cache=True, parallel=True)
 def shift_frame(frame, dx, dy):

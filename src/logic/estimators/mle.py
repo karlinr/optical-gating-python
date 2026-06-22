@@ -2,7 +2,8 @@ from loguru import logger
 import numpy as np
 
 from logic.estimators.base import register_estimator, PhaseEstimator
-from logic.utils import chi_sq 
+from utils.metrics import chi_sq
+from utils.fitters import estimate_phase_from_scores
 from app.config import Config
 from app.data_manager import data_manager
 from logic.drift_corrector import DriftCorrector, shift_frame
@@ -131,43 +132,12 @@ class MLEEstimator(PhaseEstimator):
         best_idx = np.argmin(scores)
         self._last_best_idx = best_idx
 
-        fit_points = Config.Gating.MLE_FIT_POINTS
-        
-        x = np.arange(-fit_points, fit_points + 1)
-        indices = np.arange(best_idx - fit_points, best_idx + fit_points + 1)
-        y_fit = np.take(scores, indices, mode='wrap')
-
-        try:
-            a, b, c = np.polyfit(x, y_fit, 2)
-            
-            vertex_offset = -b / (2 * a)
-
-            minimized_score = a * (vertex_offset ** 2) + b * vertex_offset + c
-
-            if minimized_score < 0:
-                logger.warning(f"Minima is negative ({minimized_score:.2f}), setting to {scores[best_idx]:.2f}.")
-                minimized_score = scores[best_idx]
-
-            reduced_chi_squared = minimized_score / corrected_frame.size
-
-            vertex_offset = np.clip(vertex_offset, -0.5, 0.5)
-        except (np.linalg.LinAlgError, TypeError):
-            vertex_offset = 0.0
-            a = 1.0
-            reduced_chi_squared = scores[best_idx] / corrected_frame.size
-            logger.warning("MLE parabola fitting failed. Defaulting vertex offset to 0.")
-
-        logger.debug(
-            f"MLE Estimate: Best Bin={best_idx}, Offset={vertex_offset:.2f}, "
-            f"Reduced Chi2={reduced_chi_squared:.2f} | Drift=({self.drift_corrector.drift_x},{self.drift_corrector.drift_y})"
-        )
-
-        phase_radians = ((best_idx + vertex_offset) % n_bins / n_bins) * 2 * np.pi
-        if a > 0:
-            uncertainty_radians = np.sqrt(1 / a) * (2 * np.pi / n_bins)
-        else:
-            uncertainty_radians = np.pi
-            logger.warning("MLE parabola is not convex. Uncertainty set to infinity.")
+        fit_res = estimate_phase_from_scores(scores, best_idx, Config.Gating.MLE_FITTER, Config.Gating.MLE_FIT_POINTS, poly_degree=Config.Gating.MLE_POLY_DEGREE, reference_period=n_bins)
+        phase_radians = fit_res["phase"]
+        vertex_offset = fit_res["vertex_offset"]
+        score = fit_res["minimized_score"]
+        uncertainty_radians = fit_res["uncertainty"]
+        reduced_chi_squared = score / (corrected_frame.size - 1)
 
         drift_x, drift_y = self.drift_corrector.drift_x, self.drift_corrector.drift_y
         current_best_match = self.binned_frames[best_idx]
