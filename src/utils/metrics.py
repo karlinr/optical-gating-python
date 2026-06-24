@@ -50,7 +50,7 @@ def sad_with_references(test_frame, reference_stack):
         
     return sad_scores
 
-@njit(cache=True, parallel=True)
+@njit(cache=True)
 def compute_sad_grid(frame, reference, initial_dx, initial_dy, eval_radius, margin_x, margin_y):
     """
     Calculate the grid of SAD values for a given frame and reference

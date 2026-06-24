@@ -11,7 +11,7 @@ def v_fitting(y_1, y_2, y_3):
         return 0.0, float(y_2)
     x = 0.5 * (y_1 - y_3) / denominator
     y = y_2 - abs(x) * denominator
-    x = np.clip(x, -0.5, 0.5)
+    #x = np.clip(x, -0.5, 0.5)
     return x, y
 
 def fit_v_3p(scores, best_idx):
@@ -29,8 +29,8 @@ def fit_v_3p(scores, best_idx):
     
     vertex_offset = 0.5 * (y_1 - y_3) / denominator
     minimized_score = y_2 - abs(vertex_offset) * denominator
-    vertex_offset = np.clip(vertex_offset, -0.5, 0.5)
-    
+    #vertex_offset = np.clip(vertex_offset, -0.5, 0.5)
+
     return float(vertex_offset), float(minimized_score), None
 
 def fit_v_np(scores, best_idx, fit_points):
@@ -89,7 +89,7 @@ def fit_u_3p(scores, best_idx):
         logger.warning(f"U-3P minima is negative ({minimized_score:.2f}), setting to {y_2:.2f}.")
         minimized_score = y_2
 
-    vertex_offset = np.clip(vertex_offset, -0.5, 0.5)
+    #vertex_offset = np.clip(vertex_offset, -0.5, 0.5)
     return float(vertex_offset), float(minimized_score), float(uncertainty)
 
 
@@ -141,6 +141,8 @@ def fit_poly_np(scores, best_idx, fit_points, poly_degree=2):
     return 0.0, float(scores[best_idx]), float('inf')
 
 def fit_minima(scores, best_idx):
+    # TODO: Fix the uncertainty returns
+    # Currently this causes an error when used with the MLE estimator
     return 0.0, float(scores[best_idx]), None
 
 def interpolate_minimum(scores, best_idx, fitter_type, fit_points=1, **kwargs):

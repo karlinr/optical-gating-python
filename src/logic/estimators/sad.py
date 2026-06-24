@@ -27,6 +27,9 @@ class SADEstimator(PhaseEstimator):
         self.period_history = []
         self.drift_corrector = DriftCorrector()
 
+        if Config.Gating.SAD_NUM_EXTRA_REF_FRAMES < Config.Gating.SAD_FIT_POINTS:
+            raise ValueError("SAD_NUM_EXTRA_REF_FRAMES must be >= SAD_FIT_POINTS for proper fitting.")
+
     def update(self, frame, **kwargs):
         """Adds a frame and manages the history buffer based on heart rate."""
         if not self.is_ready():

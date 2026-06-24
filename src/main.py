@@ -150,6 +150,20 @@ def plot_metrics(metrics):
     for name in est_names:
         phases = [r.get(name, {}).get("phase") for r in metrics["phase_results"]]
         axes[2].plot(timestamps, phases, label=f"{name} Estimate", alpha=0.4, linestyle=":")
+        
+        # Extract uncertainty estimates safely
+        uncertainties = [r.get(name, {}).get("metrics", {}).get("uncertainty_estimate") for r in metrics["phase_results"]]
+        if any(u is not None for u in uncertainties):
+            p_arr = np.array([p if p is not None else np.nan for p in phases])
+            u_arr = np.array([u if u is not None else 0.0 for u in uncertainties])
+            
+            # Render downsampled error bars to prevent boundary wrap-around fill artifacts
+            axes[2].errorbar(
+                timestamps, p_arr, yerr=u_arr, fmt='none', 
+                elinewidth=1, capsize=2, alpha=0.4, 
+                label=f"{name} $\sigma$ Bound"
+            )
+            
     axes[2].plot(timestamps, active_phases, label="Active Phase", color="black", linewidth=1.5)
     if any(p is not None for p in k_phases):
         axes[2].plot(timestamps, k_phases, label="Kalman Phase", linestyle="--")
@@ -192,19 +206,24 @@ def plot_metrics(metrics):
 
     for name in est_names:
         valid_phases = []
+        valid_uncertainties = []
         
-        # Safely extract phase values for each estimator individually
+        # Safely extract phase values and uncertainties for each estimator individually
         for r in metrics.get("phase_results", []):
             if r and isinstance(r, dict):
                 est_res = r.get(name)
                 if est_res and isinstance(est_res, dict):
                     phase = est_res.get("phase")
+                    m = est_res.get("metrics", {})
+                    unc = m.get("uncertainty_estimate")
                     if phase is not None:
                         valid_phases.append(phase)
+                        valid_uncertainties.append(unc if unc is not None else 0.0)
                         
         # Ensure there are enough points to compute a difference
         if len(valid_phases) > 1:
             valid_phases = np.array(valid_phases)
+            valid_uncertainties = np.array(valid_uncertainties)
             dp = np.diff(np.unwrap(valid_phases))
             
             # Wrap the x-axis phase to the [0, 2π) range to track cycle position
@@ -212,6 +231,18 @@ def plot_metrics(metrics):
             
             # Use scatter instead of plot because phase values do not increase monotonically
             axes[7].scatter(x_phase, dp, s=5, alpha=0.5, label=f"{name} Delta Phase")
+
+            # Calculate error propagation for Delta Phase (y-axis) and track Phase Error (x-axis)
+            if np.any(valid_uncertainties > 0):
+                sigma_dp = np.sqrt(valid_uncertainties[:-1]**2 + valid_uncertainties[1:]**2)
+                x_err = valid_uncertainties[:-1]
+                
+                # Downsample error bars to maintain clarity across thousands of scatter points
+                axes[7].errorbar(
+                    x_phase, dp, 
+                    yerr=sigma_dp, xerr=x_err, 
+                    fmt='none', elinewidth=0.8, capsize=1.5, alpha=0.4, ecolor='gray'
+                )
 
     axes[7].set_title("Delta Phase vs Phase")
     axes[7].set_xlabel("Phase (radians)")
