@@ -8,7 +8,6 @@ from app.config import Config
 from app.data_manager import data_manager
 from logic.drift_corrector import DriftCorrector, shift_frame
 from scipy.ndimage import gaussian_filter1d
-from numba import njit, prange
 
 @register_estimator("MLE")
 class MLEEstimator(PhaseEstimator):
@@ -93,12 +92,32 @@ class MLEEstimator(PhaseEstimator):
 
         block = raw_frames.reshape(n_bins, f_per_bin, *raw_frames.shape[1:])
 
-        # Get model
-        self.binned_frames = np.mean(block, axis=1)
+        self.binned_frames = np.zeros((n_bins, *raw_frames.shape[1:]), dtype=np.float32)
+        self.noise_estimate = np.zeros_like(self.binned_frames)
 
-        # Get noise model
-        sum_sq_diff = np.sum(np.diff(block, axis=1) ** 2, axis=1)
-        self.noise_estimate = np.maximum(sum_sq_diff / (2 * (f_per_bin - 1)), float(Config.Gating.MLE_MIN_NOISE))
+        # Fits a polynomial to each pixel within each bin
+        deg = getattr(Config.Gating, "MLE_MODEL_POLY_DEGREE", 1)
+        t_centered = np.arange(f_per_bin, dtype=np.float32) - (f_per_bin - 1) / 2.0
+    
+        for b in range(n_bins):
+            block_b = block[b]
+            y = block_b.reshape(f_per_bin, -1)
+            
+            # Fit the polynomial to the pixel time series for the current bin
+            coeffs = np.polyfit(t_centered, y, deg)
+            
+            # Extract the constant term
+            self.binned_frames[b] = coeffs[-1].reshape(block_b.shape[1:])
+            
+            # Compute the fitted values and residuals for variance estimation
+            fitted = np.zeros_like(y)
+            for power in range(deg + 1):
+                fitted += coeffs[power][None, :] * (t_centered[:, None] ** (deg - power))
+                
+            dof = np.maximum(1, f_per_bin - deg - 1)
+            var_b = np.sum((y - fitted) ** 2, axis=0) / dof
+
+            self.noise_estimate[b] = np.maximum(var_b.reshape(block_b.shape[1:]), float(Config.Gating.MLE_MIN_NOISE))
         
         if Config.Gating.MLE_SMOOTHING_SIGMA > 0:
             self.binned_frames = gaussian_filter1d(self.binned_frames, sigma=Config.Gating.MLE_SMOOTHING_SIGMA, axis=0, mode='wrap')
@@ -136,8 +155,16 @@ class MLEEstimator(PhaseEstimator):
         phase_radians = fit_res["phase"]
         vertex_offset = fit_res["vertex_offset"]
         score = fit_res["minimized_score"]
-        uncertainty_radians = fit_res["uncertainty"]
+        uncertainty_bins = fit_res["uncertainty"]
         reduced_chi_squared = score / (corrected_frame.size - 1)
+
+        # Scale the uncertainty estimate based on the reduced chi-squared value to account for model fit quality
+        if uncertainty_bins is not None:
+            uncertainty_radians = uncertainty_bins * (2 * np.pi / n_bins)
+            uncertainty_scale = np.sqrt(max(0.0, reduced_chi_squared))
+            uncertainty_radians = uncertainty_radians * uncertainty_scale
+        else:
+            uncertainty_radians = float('inf')
 
         drift_x, drift_y = self.drift_corrector.drift_x, self.drift_corrector.drift_y
         current_best_match = self.binned_frames[best_idx]

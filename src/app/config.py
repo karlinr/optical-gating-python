@@ -17,10 +17,10 @@ class ExperimentConfig:
 
     # Logging settings
     LOGGING_LEVEL = "INFO"
-    SAVE_BRIGHTFIELD_FRAMES = True
+    SAVE_BRIGHTFIELD_FRAMES = False
     SAVE_FLUORESCENCE_FRAMES = False
 
-    ITERATIONS = 3000
+    ITERATIONS = 5000
 
 # Timing box and pin mapping
 class TimingBox:
@@ -28,8 +28,8 @@ class TimingBox:
     # Desktop I use PORT = 'COM5' and EMULATOR_PORT = 'COM6'
     # Laptop I use PORT = 'COM4' and EMULATOR_PORT = 'COM7'
     # SPIM I use PORT = 'COM3'
-    PORT = 'COM4'#'COM5'#'COM3'
-    EMULATOR_PORT = 'COM7'#'COM6'
+    PORT = 'COM5'#'COM5'#'COM3'
+    EMULATOR_PORT = 'COM6'#'COM6'
     
     class Physical(IntEnum):
         """Actual BNC ports on the Timing Box."""
@@ -107,7 +107,7 @@ class Gating:
     PREDICTION_METHOD = "KALMAN"
 
     # Whether we should log all phase estimates or just the PHASE_SOURCE one
-    ENABLED_ESTIMATORS = ["SAD","MLE"]
+    ENABLED_ESTIMATORS = ["SAD", "MLE"]
 
     # Estimation
     """
@@ -120,27 +120,26 @@ class Gating:
     - MINIMA: Use the discrete minimum without interpolation
     """
     # SAD parameters
-
     SAD_NUM_EXTRA_REF_FRAMES = 2
     SAD_MIN_PERIOD = 5
     SAD_LOWER_THRESHOLD_FACTOR = 0.5
     SAD_UPPER_THRESHOLD_FACTOR = 0.75
     SAD_MIN_HEART_RATE_HZ = 0.5
-    # V_3P, V_NP, U_3P, U_NP, POLY_NP, MINIMA
-    SAD_FITTER = "V_NP"
+    SAD_FITTER = "V_3P"
     SAD_FIT_POINTS = 2
     SAD_POLY_DEGREE = 1
 
     # MLE parameters
     MLE_BOOTSTRAP_FRAMES = 1500
-    MLE_BINS = 48
+    MLE_BINS = 75
     MLE_MIN_NOISE = 1
     MLE_SMOOTHING_SIGMA = 0
     MLE_PHASE_SMOOTHING_SIGMA = 0
     MLE_MODEL_DRIFT_CORRECT = True
-    MLE_FITTER = "MINIMA"
-    MLE_FIT_POINTS = 1
-    MLE_POLY_DEGREE = 4
+    MLE_FITTER = "U_3P"
+    MLE_FIT_POINTS = 2
+    MLE_POLY_DEGREE = 1
+    MLE_MODEL_POLY_DEGREE = 1
 
     # Drift correction
     DRIFT_CORRECT = True
