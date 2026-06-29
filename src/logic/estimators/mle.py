@@ -17,11 +17,13 @@ class MLEEstimator(PhaseEstimator):
         super().__init__()
         self.binned_frames = None
         self.noise_estimate = None
+        self.inv_noise_estimate = None
+        self.log_variance_terms = None
+        
         self.frame_history = []
         self.target_phase = None
         self.barrier_phase = None
-        self.log_variance_terms = None
-        
+
         self.drift_corrector = DriftCorrector()
         self._last_best_idx = None
 
@@ -41,7 +43,7 @@ class MLEEstimator(PhaseEstimator):
                 if sad_result.get("barrier_phase") is not None:
                     self.barrier_phase = sad_result["barrier_phase"]
 
-                if len(self.frame_history) >= Config.Gating.MLE_BOOTSTRAP_FRAMES:
+                if len(self.frame_history) >= Config.Gating.MLE_MODEL_BOOTSTRAP_FRAMES:
                     logger.info("Sufficient samples for MLE. Building model.")
                     self.build_model()
 
@@ -69,7 +71,7 @@ class MLEEstimator(PhaseEstimator):
             smoothed_phases = np.arctan2(sin_p, cos_p) % (2 * np.pi)
             self.frame_history = [(h[0], sp, h[2], h[3]) for h, sp in zip(self.frame_history, smoothed_phases)]          
 
-        n_bins = Config.Gating.MLE_BINS
+        n_bins = Config.Gating.MLE_MODEL_BINS
         f_per_bin = len(self.frame_history) // n_bins
         self.frame_history.sort(key=lambda x: x[1])
 
@@ -91,7 +93,6 @@ class MLEEstimator(PhaseEstimator):
             raw_frames = np.array([h[0] for h in clean_history], dtype=np.float32)
 
         block = raw_frames.reshape(n_bins, f_per_bin, *raw_frames.shape[1:])
-
         self.binned_frames = np.zeros((n_bins, *raw_frames.shape[1:]), dtype=np.float32)
         self.noise_estimate = np.zeros_like(self.binned_frames)
 
@@ -102,10 +103,10 @@ class MLEEstimator(PhaseEstimator):
         for b in range(n_bins):
             block_b = block[b]
             y = block_b.reshape(f_per_bin, -1)
-            
+
             # Fit the polynomial to the pixel time series for the current bin
             coeffs = np.polyfit(t_centered, y, deg)
-            
+
             # Extract the constant term
             self.binned_frames[b] = coeffs[-1].reshape(block_b.shape[1:])
             
@@ -116,12 +117,13 @@ class MLEEstimator(PhaseEstimator):
                 
             dof = np.maximum(1, f_per_bin - deg - 1)
             var_b = np.sum((y - fitted) ** 2, axis=0) / dof
+            self.noise_estimate[b] = np.maximum(var_b.reshape(block_b.shape[1:]), float(Config.Gating.MLE_MODEL_MIN_NOISE))
 
-            self.noise_estimate[b] = np.maximum(var_b.reshape(block_b.shape[1:]), float(Config.Gating.MLE_MIN_NOISE))
+        self.inv_noise_estimate = 1.0 / self.noise_estimate
         
-        if Config.Gating.MLE_SMOOTHING_SIGMA > 0:
-            self.binned_frames = gaussian_filter1d(self.binned_frames, sigma=Config.Gating.MLE_SMOOTHING_SIGMA, axis=0, mode='wrap')
-            self.noise_estimate = gaussian_filter1d(self.noise_estimate, sigma=Config.Gating.MLE_SMOOTHING_SIGMA, axis=0, mode='wrap')
+        if Config.Gating.MLE_MODEL_SMOOTHING_SIGMA > 0:
+            self.binned_frames = gaussian_filter1d(self.binned_frames, sigma=Config.Gating.MLE_MODEL_SMOOTHING_SIGMA, axis=0, mode='wrap')
+            self.noise_estimate = gaussian_filter1d(self.noise_estimate, sigma=Config.Gating.MLE_MODEL_SMOOTHING_SIGMA, axis=0, mode='wrap')
 
         data_manager.save("binned_frames", self.binned_frames.copy())
         data_manager.save("noise_estimate", self.noise_estimate.copy())
@@ -143,13 +145,29 @@ class MLEEstimator(PhaseEstimator):
 
     def estimate(self, frame):
         corrected_binned = self.drift_corrector.adjust_reference_array(self.binned_frames)
-        corrected_noise = self.drift_corrector.adjust_reference_array(self.noise_estimate)
+        corrected_inv_noise = self.drift_corrector.adjust_reference_array(self.inv_noise_estimate)
         corrected_frame = self.drift_corrector.adjust_live_frame(frame)
 
-        scores = chi_sq(corrected_frame, corrected_binned, corrected_noise) + self.log_variance_terms
+        scores = chi_sq(corrected_frame, corrected_binned, corrected_inv_noise) + self.log_variance_terms
         n_bins = len(scores)
         best_idx = np.argmin(scores)
         self._last_best_idx = best_idx
+
+        anomaly_thresh = getattr(Config.Gating, "MLE_ANOMALY_THRESH", 5.0)
+        score_anomaly = anomaly_thresh * corrected_frame.size + self.log_variance_terms[best_idx]
+
+        alpha = getattr(Config.Gating, "MLE_PIXEL_CORRELATION_FACTOR", 0.25)
+        
+        log_lik_bins = -0.5 * alpha * scores
+        log_lik_anomaly = -0.5 * alpha * score_anomaly
+
+        all_log_terms = np.append(log_lik_bins, log_lik_anomaly)
+        max_log = np.max(all_log_terms)
+        stable_exp = np.exp(all_log_terms - max_log)
+        probabilities = stable_exp / np.sum(stable_exp)
+
+        bin_probabilities = probabilities[:n_bins]
+        p_anomaly = probabilities[-1]
 
         fit_res = estimate_phase_from_scores(scores, best_idx, Config.Gating.MLE_FITTER, Config.Gating.MLE_FIT_POINTS, poly_degree=Config.Gating.MLE_POLY_DEGREE, reference_period=n_bins)
         phase_radians = fit_res["phase"]
@@ -159,6 +177,8 @@ class MLEEstimator(PhaseEstimator):
         reduced_chi_squared = score / (corrected_frame.size - 1)
 
         # Scale the uncertainty estimate based on the reduced chi-squared value to account for model fit quality
+        # NOTE: I need to think if this is actually statistically valid.
+        # https://arxiv.org/pdf/1012.3754
         if uncertainty_bins is not None:
             uncertainty_radians = uncertainty_bins * (2 * np.pi / n_bins)
             uncertainty_scale = np.sqrt(max(0.0, reduced_chi_squared))
@@ -169,11 +189,20 @@ class MLEEstimator(PhaseEstimator):
         drift_x, drift_y = self.drift_corrector.drift_x, self.drift_corrector.drift_y
         current_best_match = self.binned_frames[best_idx]
         self.drift_corrector.add_sample(frame, best_match=current_best_match)
+
+        # This is purely for the UI but is rather slow passing this within the dict
+        # Need to consider how we can speed this up.
+        residual = (corrected_frame - corrected_binned[best_idx]) * np.sqrt(corrected_inv_noise[best_idx])
         
         return {
             "phase": phase_radians,
             "target_phase": self.target_phase,
             "barrier_phase": self.barrier_phase,
+            "residual": residual,
+            "probabilities": {
+                "phase_bins": bin_probabilities,
+                "unknown_anomaly": p_anomaly
+            },
             "metrics": {
                 "reduced_chi_squared": reduced_chi_squared - self.log_variance_terms[best_idx] / corrected_frame.size,
                 "uncertainty_estimate": uncertainty_radians,

@@ -64,7 +64,7 @@ class SystemController:
         self._apply_camera_pin_mappings(Config.Cameras.FL)
 
         # Trigger a single frame on each camera to verify connection and get initial frame dimensions
-        self.timing_box.add_step([Config.TimingBox.Logical.BF, Config.TimingBox.Logical.FL_1], duration_ticks=TimingBox.seconds_to_24bit_ticks(0.01))  # Trigger brightfield camera
+        self.timing_box.add_step(Config.Cameras.BF.box_pins + Config.Cameras.FL.box_pins, duration_ticks=TimingBox.seconds_to_24bit_ticks(0.01))
         self.timing_box.add_step([], duration_ticks=TimingBox.seconds_to_24bit_ticks(0.05))  # Wait for 0.05 seconds (total 0.06 seconds from first trigger)
         self.timing_box.finalize_sequence(repeat = False)
 
@@ -179,7 +179,8 @@ class SystemController:
 
         # Upload the pianola sequence that will be used to trigger the fluorescence camera during the experiment
         # We should only have to do this once since we can use fire_at() to schedule it at the correct times during the experiment
-        self.timing_box.add_step([Config.TimingBox.Logical.FL_1, Config.TimingBox.Logical.LAS_BLUE], duration_ticks=TimingBox.seconds_to_24bit_ticks(0.01))  # Trigger fluorescence camera
+        #self.timing_box.add_step([Config.TimingBox.Logical.FL_1, Config.TimingBox.Logical.LAS_BLUE, Config.TimingBox.Logical.LAS_GREEN], duration_ticks=TimingBox.seconds_to_24bit_ticks(0.01))  # Trigger fluorescence camera
+        self.timing_box.add_step(Config.Cameras.FL.box_pins, duration_ticks=TimingBox.seconds_to_24bit_ticks(Config.Cameras.FL.exposure_us / 1e6))
         self.timing_box.add_step([], duration_ticks=TimingBox.seconds_to_24bit_ticks(0.005))
         self.timing_box.finalize_sequence(repeat = False)
 

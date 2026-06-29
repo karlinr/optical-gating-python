@@ -20,16 +20,16 @@ class ExperimentConfig:
     SAVE_BRIGHTFIELD_FRAMES = False
     SAVE_FLUORESCENCE_FRAMES = False
 
-    ITERATIONS = 5000
+    ITERATIONS = 250000
 
 # Timing box and pin mapping
 class TimingBox:
     # Karlin tempnote:
-    # Desktop I use PORT = 'COM5' and EMULATOR_PORT = 'COM6'
-    # Laptop I use PORT = 'COM4' and EMULATOR_PORT = 'COM7'
-    # SPIM I use PORT = 'COM3'
-    PORT = 'COM5'#'COM5'#'COM3'
-    EMULATOR_PORT = 'COM6'#'COM6'
+    # Desktop I use PORT = "COM5" and EMULATOR_PORT = "COM6"
+    # Laptop I use PORT = "COM4" and EMULATOR_PORT = "COM7"
+    # SPIM I use PORT = "COM3"
+    PORT = "COM3"
+    EMULATOR_PORT = "COM7"
     
     class Physical(IntEnum):
         """Actual BNC ports on the Timing Box."""
@@ -71,13 +71,13 @@ class Cameras:
         serial="28600723",
         exposure_us=1000,
         gain=0.0,
-        downsample=None,#"XI_DWN_2x2",
+        downsample="XI_DWN_4x4",
         roi=(828, 418, 484, 488),
         trigger_pin=2, # Physical GPIO pin on the camera
         box_pins=[
             TimingBox.Logical.BF
             ],
-        framerate=80,
+        framerate=120,
         sensor_taps = "XI_TAP_CNT_4"
     )
 
@@ -85,14 +85,15 @@ class Cameras:
     FL = CameraConfig(
         label="Fluorescence camera",
         serial="CEMAU2502004",
-        exposure_us=6000,
+        exposure_us=1000,
         gain=1.0,
         downsample=None,
         roi=None,
         trigger_pin=3, # Physical GPIO pin on the camera
         box_pins=[
-            TimingBox.Logical.FL_1, 
-            TimingBox.Logical.LAS_BLUE, 
+            TimingBox.Logical.FL_1,
+            TimingBox.Logical.FL_2,
+            #TimingBox.Logical.LAS_BLUE, 
             TimingBox.Logical.LAS_GREEN
         ],
         framerate=None,
@@ -130,20 +131,20 @@ class Gating:
     SAD_POLY_DEGREE = 1
 
     # MLE parameters
-    MLE_BOOTSTRAP_FRAMES = 1500
-    MLE_BINS = 75
-    MLE_MIN_NOISE = 1
-    MLE_SMOOTHING_SIGMA = 0
+    MLE_MODEL_BOOTSTRAP_FRAMES = 2000
+    MLE_MODEL_BINS = 50
+    MLE_MODEL_MIN_NOISE = 30
+    MLE_MODEL_SMOOTHING_SIGMA = 0
     MLE_PHASE_SMOOTHING_SIGMA = 0
     MLE_MODEL_DRIFT_CORRECT = True
+    MLE_MODEL_POLY_DEGREE = 1
     MLE_FITTER = "U_3P"
     MLE_FIT_POINTS = 2
     MLE_POLY_DEGREE = 1
-    MLE_MODEL_POLY_DEGREE = 1
 
     # Drift correction
     DRIFT_CORRECT = True
-    DRIFT_MAX_SEARCH = 1
+    DRIFT_MAX_SEARCH = 2
     DRIFT_INITIAL_SEARCH = 5
     
     # Prediction
@@ -157,10 +158,10 @@ class Gating:
 
     # Kalman filter parameters
     KALMAN_MEASUREMENT_NOISE = 0.0001
-    KALMAN_PROCESS_NOISE = 0.0001
+    KALMAN_PROCESS_NOISE = 0.00001
 
 class Config:
-    EMULATE_CAMERA = True
+    EMULATE_CAMERA = False
 
     ExperimentConfig = ExperimentConfig
     TimingBox = TimingBox

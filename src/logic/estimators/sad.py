@@ -62,7 +62,7 @@ class SADEstimator(PhaseEstimator):
             return False
 
         raw_sequence = [f[0] for f in self.frame_history[start:stop]]
-        self.reference_frames = np.array(raw_sequence)
+        self.reference_frames = np.array(raw_sequence, dtype=np.float32)
         self.reference_period = period
 
         target_frame, barrier_frame = self._pick_frames()
@@ -216,10 +216,13 @@ class SADEstimator(PhaseEstimator):
         current_best_match = self.reference_frames[best_idx]
         self.drift_corrector.add_sample(frame, best_match=current_best_match)
 
+        residual = corrected_frame - corrected_refs[best_idx]
+
         return {
             "phase": phase % (2 * np.pi),
             "target_phase": self.target_phase,
             "barrier_phase": self.barrier_phase,
+            "residual": residual,
             "metrics": {
                 "sad_score": score,
                 "best_index": best_idx - Config.Gating.SAD_NUM_EXTRA_REF_FRAMES,

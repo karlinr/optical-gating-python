@@ -1,21 +1,20 @@
 from numba import njit, prange, set_num_threads
 import numpy as np
-from loguru import logger
 from app.config import Config
 
 set_num_threads(Config.ExperimentConfig.NUM_THREADS)
 
-@njit(parallel=True, cache=True)
-def chi_sq(test_frame, binned_frames, noise_est):
+@njit(parallel=True, cache=True, fastmath=True)
+def chi_sq(test_frame, binned_frames, inv_noise_est):
     """
     Compute chi-squared values for a test frame against multiple binned frames with noise estimates.
     """
     # Test frmame (w,h) - 2D array
     # binned_frames (n_bins, w, h) - 3D array
-    # noise_est (n_bins, w, h) - 3D array
+    # inv_noise_est (n_bins, w, h) - 3D array
     n_bins, w, h = binned_frames.shape
 
-    chi_sq_terms = np.zeros(n_bins, dtype=np.float64)
+    chi_sq_terms = np.zeros(n_bins, dtype=np.float32)
 
     for i in prange(n_bins):
         acc = 0.0
@@ -23,8 +22,8 @@ def chi_sq(test_frame, binned_frames, noise_est):
             for y in range(h):
                 obs = float(test_frame[x, y])
                 exp = float(binned_frames[i, x, y])
-                var = float(noise_est[i, x, y])
-                acc += ((obs - exp) ** 2 / var)
+                inv_var = float(inv_noise_est[i, x, y])
+                acc += (((obs - exp) ** 2 ) * inv_var)
         chi_sq_terms[i] = acc
 
     return chi_sq_terms
@@ -37,7 +36,7 @@ def sad_with_references(test_frame, reference_stack):
     """
     n_refs, w, h = reference_stack.shape
 
-    sad_scores = np.zeros(n_refs, dtype=np.float64)
+    sad_scores = np.zeros(n_refs, dtype=np.float32)
 
     for i in prange(n_refs):
         acc = 0.0
@@ -50,14 +49,14 @@ def sad_with_references(test_frame, reference_stack):
         
     return sad_scores
 
-@njit(cache=True)
+@njit(parallel=True, cache=True, fastmath=True)
 def compute_sad_grid(frame, reference, initial_dx, initial_dy, eval_radius, margin_x, margin_y):
     """
     Calculate the grid of SAD values for a given frame and reference
     """
     w, h = frame.shape[:2]
     grid_size = 2 * eval_radius + 1
-    sad_grid = np.zeros((grid_size, grid_size), dtype=np.float64)
+    sad_grid = np.zeros((grid_size, grid_size), dtype=np.float32)
     
     # Slice the reference centre
     ref_centre = reference[margin_x : w - margin_x, margin_y : h - margin_y]

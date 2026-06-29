@@ -67,6 +67,7 @@ class PhaseManager:
             "phase": active_output.get("phase"),
             "target_phase": active_output.get("target_phase"),
             "barrier_phase": active_output.get("barrier_phase"),
+            "residual": active_output.get("residual"),
             "metrics": active_output.get("metrics", {})
         }
             

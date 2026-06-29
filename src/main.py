@@ -118,10 +118,10 @@ def plot_metrics(metrics):
     k_phases = [p[1].get("phase_estimate") if p else None for p in metrics["prediction_results"]]
     k_velocities = [p[1].get("phase_velocity_estimate") if p else None for p in metrics["prediction_results"]]
 
-    fig, axs = plt.subplots(4, 2, figsize=(14, 18))
+    # 5x2 layout grid to track alignment metrics, tracking states, and stability distributions
+    fig, axs = plt.subplots(5, 2, figsize=(14, 22))
     axes = axs.flatten()
     
-    # Helper to check if a subplot has any active handles before drawing a legend
     def try_legend(ax):
         handles, labels = ax.get_legend_handles_labels()
         if handles:
@@ -136,14 +136,7 @@ def plot_metrics(metrics):
         chi_squares = [r.get(name, {}).get("metrics", {}).get("reduced_chi_squared") for r in metrics["phase_results"]]
         if any(c is not None for c in chi_squares):
             axes[1].plot(timestamps, chi_squares, label=f"{name} Reduced Chi2")
-        # Plot 1, 3, and 5 sigma thresholds for reference
-        sad_scores = [r.get(name, {}).get("metrics", {}).get("sad_score") for r in metrics["phase_results"]]
-        """if any(s is not None for s in sad_scores):
-            axes[1].plot(timestamps, sad_scores, label=f"{name} SAD Score", alpha=0.7)"""
     axes[1].set_title("Model Fit / Alignment Scores")
-    #axes[1].axhline(1.0, color='green', linestyle='--')
-    #axes[1].axhline(3.0, color='orange', linestyle='--')
-    #axes[1].axhline(5.0, color='red', linestyle='--')
     try_legend(axes[1])
 
     # 2. Phase Estimates
@@ -151,13 +144,11 @@ def plot_metrics(metrics):
         phases = [r.get(name, {}).get("phase") for r in metrics["phase_results"]]
         axes[2].plot(timestamps, phases, label=f"{name} Estimate", alpha=0.4, linestyle=":")
         
-        # Extract uncertainty estimates safely
         uncertainties = [r.get(name, {}).get("metrics", {}).get("uncertainty_estimate") for r in metrics["phase_results"]]
         if any(u is not None for u in uncertainties):
             p_arr = np.array([p if p is not None else np.nan for p in phases])
             u_arr = np.array([u if u is not None else 0.0 for u in uncertainties])
             
-            # Render downsampled error bars to prevent boundary wrap-around fill artifacts
             axes[2].errorbar(
                 timestamps, p_arr, yerr=u_arr, fmt='none', 
                 elinewidth=1, capsize=2, alpha=0.4, 
@@ -201,14 +192,11 @@ def plot_metrics(metrics):
     axes[6].set_title("Drift (pixels)")
     try_legend(axes[6])
 
-    # Phase delta-phase
-    # Where delta-phase is np.diff(np.unwrap(phases)) plotted against the phase itself
-
+    # 7. Delta Phase vs Phase
     for name in est_names:
         valid_phases = []
         valid_uncertainties = []
         
-        # Safely extract phase values and uncertainties for each estimator individually
         for r in metrics.get("phase_results", []):
             if r and isinstance(r, dict):
                 est_res = r.get(name)
@@ -220,24 +208,17 @@ def plot_metrics(metrics):
                         valid_phases.append(phase)
                         valid_uncertainties.append(unc if unc is not None else 0.0)
                         
-        # Ensure there are enough points to compute a difference
         if len(valid_phases) > 1:
             valid_phases = np.array(valid_phases)
             valid_uncertainties = np.array(valid_uncertainties)
             dp = np.diff(np.unwrap(valid_phases))
-            
-            # Wrap the x-axis phase to the [0, 2π) range to track cycle position
             x_phase = np.mod(valid_phases[:-1], 2 * np.pi)
-            
-            # Use scatter instead of plot because phase values do not increase monotonically
             axes[7].scatter(x_phase, dp, s=5, alpha=0.5, label=f"{name} Delta Phase")
 
-            # Calculate error propagation for Delta Phase (y-axis) and track Phase Error (x-axis)
             if np.any(valid_uncertainties > 0):
                 sigma_dp = np.sqrt(valid_uncertainties[:-1]**2 + valid_uncertainties[1:]**2)
                 x_err = valid_uncertainties[:-1]
                 
-                # Downsample error bars to maintain clarity across thousands of scatter points
                 axes[7].errorbar(
                     x_phase, dp, 
                     yerr=sigma_dp, xerr=x_err, 
@@ -249,6 +230,61 @@ def plot_metrics(metrics):
     axes[7].set_ylabel("Delta Phase (radians)")
     axes[7].set_xlim(0, 2 * np.pi)
     try_legend(axes[7])
+
+    # 8. Categorical State Probabilities (Outliers and Best Matching Phase Bin)
+    for name in est_names:
+        p_anon = [r.get(name, {}).get("probabilities", {}).get("unknown_anomaly") for r in metrics["phase_results"]]
+        
+        # Extract the probability associated with whichever discrete phase bin was selected as the winner
+        p_best = []
+        for r in metrics["phase_results"]:
+            est_res = r.get(name, {})
+            p_bins = est_res.get("probabilities", {}).get("phase_bins")
+            b_idx = est_res.get("metrics", {}).get("best_index")
+            if p_bins is not None and b_idx is not None:
+                p_best.append(p_bins[b_idx])
+            else:
+                p_best.append(None)
+            
+        if any(p is not None for p in p_anon):
+            axes[8].plot(timestamps, p_anon, label=f"{name} Outliers (Anomaly)", color="crimson", alpha=0.8)
+        if any(p is not None for p in p_best):
+            axes[8].plot(timestamps, p_best, label=f"{name} Best Bin Probability", color="forestgreen", alpha=0.8)
+            
+    axes[8].set_title("System State Probabilities")
+    axes[8].set_xlabel("Time (s)")
+    axes[8].set_ylabel("Probability")
+    axes[8].set_ylim(-0.05, 1.05)
+    axes[8].grid(True, alpha=0.3)
+    try_legend(axes[8])
+
+    # 9. Individual Phase Bin Probabilities Waterfall Heatmap
+    for name in est_names:
+        n_bins_detected = None
+        for r in metrics["phase_results"]:
+            p_bins = r.get(name, {}).get("probabilities", {}).get("phase_bins")
+            if p_bins is not None:
+                n_bins_detected = len(p_bins)
+                break
+        
+        if n_bins_detected is not None:
+            bin_matrix = np.full((n_bins_detected, len(timestamps)), np.nan)
+            for f_idx, r in enumerate(metrics["phase_results"]):
+                p_bins = r.get(name, {}).get("probabilities", {}).get("phase_bins")
+                if p_bins is not None:
+                    bin_matrix[:, f_idx] = p_bins
+            
+            im = axes[9].imshow(
+                bin_matrix, aspect='auto', origin='lower',
+                extent=[0, len(timestamps), 0, n_bins_detected],
+                cmap='viridis', vmin=0.0, vmax=1.0
+            )
+            fig.colorbar(im, ax=axes[9], orientation='vertical', label='Bin Probability')
+            axes[9].set_ylabel("Bin Index")
+            axes[9].set_xlabel("Frame Index")
+            break
+
+    axes[9].set_title("Phase Bin Probability Distribution Waterfall")
 
     plt.tight_layout()
     plt.savefig(os.path.join(storage_path, "acquisition_metrics.png"))
@@ -262,7 +298,6 @@ def plot_peak_locking_diagnostics(metrics):
     import numpy as np
     import matplotlib.pyplot as plt
     
-    # Identify all active estimators (excluding the 'ACTIVE' metadata block)
     est_names = sorted(list(set(name for r in metrics["phase_results"] for name in r if name != "ACTIVE")))
     if not est_names:
         logger.warning("No estimator metrics found for peak locking analysis.")
@@ -270,7 +305,6 @@ def plot_peak_locking_diagnostics(metrics):
 
     fig, axs = plt.subplots(len(est_names), 3, figsize=(18, 5 * len(est_names)))
     
-    # Ensure axes matrix is 2D even if only one estimator is present
     if len(est_names) == 1:
         axs = np.expand_dims(axs, axis=0)
 
@@ -295,7 +329,6 @@ def plot_peak_locking_diagnostics(metrics):
                     if dy is not None:
                         drift_ys.append(dy)
 
-        # 1. Histogram of Phase Sub-bin Vertex Offsets
         if vertex_offsets:
             axs[idx, 0].hist(vertex_offsets, bins=50, range=(-1.0, 1.0), alpha=0.75, color='royalblue', edgecolor='black')
             axs[idx, 0].axvline(0.0, color='crimson', linestyle='--', linewidth=1.5)
@@ -304,9 +337,7 @@ def plot_peak_locking_diagnostics(metrics):
             axs[idx, 0].set_ylabel("Count")
             axs[idx, 0].grid(True, alpha=0.3)
             
-        # 2. Histogram of Fractional Spatial Drift
         if drift_xs and drift_ys:
-            # Map continuous drift coordinates to their fractional component [-0.5, 0.5] relative to closest integer
             frac_x = np.array(drift_xs) - np.round(drift_xs)
             frac_y = np.array(drift_ys) - np.round(drift_ys)
             
@@ -319,7 +350,6 @@ def plot_peak_locking_diagnostics(metrics):
             axs[idx, 1].legend()
             axs[idx, 1].grid(True, alpha=0.3)
             
-            # 3. 2D Scatter Plot of Fractional Spatial Drift
             axs[idx, 2].scatter(frac_x, frac_y, alpha=0.2, s=6, color='purple')
             axs[idx, 2].axhline(0.0, color='black', linestyle=':', alpha=0.4)
             axs[idx, 2].axvline(0.0, color='black', linestyle=':', alpha=0.4)
@@ -331,7 +361,6 @@ def plot_peak_locking_diagnostics(metrics):
             axs[idx, 2].set_aspect('equal')
 
     plt.tight_layout()
-    # Save alongside the default metrics plot
     try:
         import os
         plt.savefig(os.path.join(storage_path, "peak_locking_diagnostics.png"), dpi=150)
