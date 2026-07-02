@@ -217,7 +217,7 @@ class SystemController:
     def trigger_fl_frame(self, timestamp: float):
         """Schedules a fluorescence trigger with safety checks for wrap-around."""
         target_tick = self.timestamp_to_ticks(timestamp)
-        logger.info(f"Scheduling fluorescence trigger at timestamp {timestamp} (Timing Box tick: {target_tick})")
+        logger.debug(f"Scheduling fluorescence trigger at timestamp {timestamp} (Timing Box tick: {target_tick})")
 
         return self.timing_box.fire_at(target_tick)
 

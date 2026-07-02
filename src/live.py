@@ -454,7 +454,7 @@ def run_hardware_loop(ui_queue, bf_queue, fl_queue, res_queue, control_queue, st
                             exact_hardware_target = timestamp + relative_wait
                             box_time, response = controller.trigger_fl_frame(exact_hardware_target)
                             if response == 1:
-                                logger.success("Fluorescence trigger successfully committed to hardware.")
+                                logger.debug("Fluorescence trigger successfully committed to hardware.")
                                 hist_committed_triggers.append((timestamp, exact_hardware_target))
                                 ui_data["trigger"] = (timestamp, exact_hardware_target)
 

@@ -12,6 +12,7 @@ from app.config import Config
 from logic.phase_estimator import PhaseManager
 from logic.predictors.base import predictor_registry
 from logic.trigger_decider import TriggerDecider
+from logic.gating_manager import GatingManager
 
 import matplotlib.pyplot as plt
 
@@ -77,11 +78,11 @@ def run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigg
 
                 if fire_signal:
                     exact_hardware_target = timestamp + relative_wait
-                    logger.info(f"Scheduling fluorescence trigger at absolute time {exact_hardware_target}...")
+                    logger.debug(f"Scheduling fluorescence trigger at absolute time {exact_hardware_target}...")
                     
                     box_time, response = controller.trigger_fl_frame(exact_hardware_target)
                     if response == 1:
-                        logger.success("Fluorescence trigger successfully committed to hardware.")
+                        logger.debug("Fluorescence trigger successfully committed to hardware.")
                         metrics["committed_triggers"].append((timestamp, exact_hardware_target))
                         
                         def async_fluorescence_save(target = exact_hardware_target):
@@ -89,7 +90,7 @@ def run_gated_acquisition_loop(controller, phase_manager, phase_predictor, trigg
                                 fl_frame, fl_timestamp, fl_metadata = controller.get_latest_fl_frame()
                                 if Config.ExperimentConfig.SAVE_FLUORESCENCE_FRAMES:
                                     data_manager.save("fluorescence", fl_frame, chunk_size=Config.ExperimentConfig.FLUORESCENCE_CHUNK_SIZE)
-                                logger.success(f"Asynchronously saved FL frame for target time {target:.4f}")
+                                logger.debug(f"Asynchronously saved FL frame for target time {target:.4f}")
                             except Exception as e:
                                 logger.error(f"Background fluorescence pipeline failed: {e}")
 
