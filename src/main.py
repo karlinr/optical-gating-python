@@ -12,7 +12,6 @@ from app.config import Config
 from logic.phase_estimator import PhaseManager
 from logic.predictors.base import predictor_registry
 from logic.trigger_decider import TriggerDecider
-from logic.gating_manager import GatingManager
 
 import matplotlib.pyplot as plt
 
