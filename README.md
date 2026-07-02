@@ -12,7 +12,7 @@ Implementing prospective optical gating in Python. Primarily for testing the new
 - Phase estimation using MLE method
 - Fluorescence camera triggering
 - Phase prediction utilising standard barrier prediction or a Kalman filter
+- Temporary UI written using AI
 ## Not implemented
-- Drift correction
 - Stage controls
-- User interface
+- Continuous model updating for long-term imaging
