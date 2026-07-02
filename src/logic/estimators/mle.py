@@ -61,15 +61,7 @@ class MLEEstimator(PhaseEstimator):
             last_frame_drift_y = self.frame_history[-1][3]
         else:
             last_frame_drift_x = 0.0
-            last_frame_drift_y = 0.0
-
-        # Apply smoothing to the frame history phase estimates to reduce noise before binning
-        if Config.Gating.MLE_PHASE_SMOOTHING_SIGMA > 0:
-            phases = np.array([h[1] for h in self.frame_history])
-            cos_p = gaussian_filter1d(np.cos(phases), sigma=Config.Gating.MLE_PHASE_SMOOTHING_SIGMA, mode='nearest')
-            sin_p = gaussian_filter1d(np.sin(phases), sigma=Config.Gating.MLE_PHASE_SMOOTHING_SIGMA, mode='nearest')
-            smoothed_phases = np.arctan2(sin_p, cos_p) % (2 * np.pi)
-            self.frame_history = [(h[0], sp, h[2], h[3]) for h, sp in zip(self.frame_history, smoothed_phases)]          
+            last_frame_drift_y = 0.0     
 
         n_bins = Config.Gating.MLE_MODEL_BINS
         f_per_bin = len(self.frame_history) // n_bins
@@ -120,10 +112,6 @@ class MLEEstimator(PhaseEstimator):
             self.noise_estimate[b] = np.maximum(var_b.reshape(block_b.shape[1:]), float(Config.Gating.MLE_MODEL_MIN_NOISE))
 
         self.inv_noise_estimate = 1.0 / self.noise_estimate
-        
-        if Config.Gating.MLE_MODEL_SMOOTHING_SIGMA > 0:
-            self.binned_frames = gaussian_filter1d(self.binned_frames, sigma=Config.Gating.MLE_MODEL_SMOOTHING_SIGMA, axis=0, mode='wrap')
-            self.noise_estimate = gaussian_filter1d(self.noise_estimate, sigma=Config.Gating.MLE_MODEL_SMOOTHING_SIGMA, axis=0, mode='wrap')
 
         data_manager.save("binned_frames", self.binned_frames.copy())
         data_manager.save("noise_estimate", self.noise_estimate.copy())
@@ -156,7 +144,7 @@ class MLEEstimator(PhaseEstimator):
         anomaly_thresh = getattr(Config.Gating, "MLE_ANOMALY_THRESH", 5.0)
         score_anomaly = anomaly_thresh * corrected_frame.size + self.log_variance_terms[best_idx]
 
-        alpha = getattr(Config.Gating, "MLE_PIXEL_CORRELATION_FACTOR", 0.25)
+        alpha = getattr(Config.Gating, "MLE_PIXEL_CORRELATION_FACTOR",  1)
         
         log_lik_bins = -0.5 * alpha * scores
         log_lik_anomaly = -0.5 * alpha * score_anomaly
