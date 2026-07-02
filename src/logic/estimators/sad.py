@@ -1,11 +1,12 @@
 from loguru import logger
 import numpy as np
 
+import optical_gating_alignment.optical_gating_alignment as oga
+
 from logic.drift_corrector import DriftCorrector
 from logic.estimators.base import register_estimator, PhaseEstimator
 from utils.metrics import sad_with_references
-from utils.fitters import v_fitting
-from utils.fitters import estimate_phase_from_scores
+from utils.fitters import v_fitting, estimate_phase_from_scores
 from app.config import Config
 from app.data_manager import data_manager
 
@@ -18,10 +19,10 @@ class SADEstimator(PhaseEstimator):
     dependencies = []
 
     def __init__(self):
-
         super().__init__()
         self.reference_frames = None
         self.reference_period = None
+        self.target_phase = None
         self.barrier_phase = None
         self.frame_history = []
         self.period_history = []
@@ -29,55 +30,85 @@ class SADEstimator(PhaseEstimator):
 
         if Config.Gating.SAD_NUM_EXTRA_REF_FRAMES < Config.Gating.SAD_FIT_POINTS:
             raise ValueError("SAD_NUM_EXTRA_REF_FRAMES must be >= SAD_FIT_POINTS for proper fitting.")
+        
+        # Long-term update configuration
+        self.aligner = oga.Aligner({"max_offset": 3, "resampled_period": 80})
+        self.initial_target_phase = None
+
+        self.frames_since_last_update = 0
 
     def update(self, frame, **kwargs):
         """Adds a frame and manages the history buffer based on heart rate."""
-        if not self.is_ready():
-            timestamp = kwargs.get("timestamp")
-            if timestamp is None:
-                logger.error("SADEstimator requires a timestamp in update.")
-                return None
-            
-            self.frame_history.append((frame, timestamp))
+        timestamp = kwargs.get("timestamp")
+        if timestamp is None:
+            logger.error("SADEstimator requires a timestamp in update.")
+            return None
+        
+        self.frame_history.append((frame, timestamp))
+        ref_buffer_duration = self.frame_history[-1][1] - self.frame_history[0][1]
+        max_duration = 1.0 / Config.Gating.SAD_MIN_HEART_RATE_HZ
+
+        while ref_buffer_duration > max_duration:
+            self.frame_history.pop(0)
             ref_buffer_duration = self.frame_history[-1][1] - self.frame_history[0][1]
-            max_duration = 1.0 / Config.Gating.SAD_MIN_HEART_RATE_HZ
 
-            while ref_buffer_duration > max_duration:
-                self.frame_history.pop(0)
-                ref_buffer_duration = self.frame_history[-1][1] - self.frame_history[0][1]
-
+        if not self.is_ready():
             if len(self.frame_history) > Config.Gating.SAD_MIN_PERIOD:
                 self.build_model()
-
-        if self.is_ready():
+        else:
+            self.frames_since_last_update += 1
+            if self.frames_since_last_update > 1000:
+                logger.info(f"Rebuilding SAD reference")
+                self.build_model()
             return self.estimate(frame)
+        
+
 
         return None
 
     def build_model(self):
         """Logic to establish period, extract sequence, and set barrier phase."""
+
+        # Build our model using the logic from open-optical-gating
         start, stop, period = self._establish_indices()
-        
         if start is None:
             return False
-
-        raw_sequence = [f[0] for f in self.frame_history[start:stop]]
-        self.reference_frames = np.array(raw_sequence, dtype=np.float32)
+        self.reference_frames = np.array([f[0] for f in self.frame_history[start:stop]])
         self.reference_period = period
 
-        target_frame, barrier_frame = self._pick_frames()
+        current_drift = [int(np.floor(self.drift_corrector.drift_x)), int(np.floor(self.drift_corrector.drift_y))]
+        # On our first run we build the model from scratch
+        if not self.is_ready():
+            target_frame, barrier_frame = self._pick_frames()
+            self.target_phase = 2 * np.pi * (target_frame / self.reference_period)
+            # We store our initial target so we can ensure that our phase values are consistent across refreshes
+            self.initial_target_phase = self.target_phase
+            self.barrier_phase = 2 * np.pi * (barrier_frame / self.reference_period)
+            
+            self.aligner.process_initial_sequence(
+                this_sequence=self.reference_frames, 
+                this_period=self.reference_period, 
+                this_drift=current_drift, 
+                tgt_frame=target_frame
+            )
+            
+            self._ready = True
+            logger.info(f"SAD Model Built: Period={period:.2f}, Target Phase={self.target_phase:.2f}")
+        else:
+            # On subsequent build_model calls ensure we do a sequence alignment
+            new_target_frame = self.aligner.process_sequence(
+                this_sequence=self.reference_frames,
+                this_period=period,
+                this_drift=current_drift
+            )
+            
+            self.target_phase = 2 * np.pi * (new_target_frame / self.reference_period)
+            
+            self.frames_since_last_update = 0
 
-        logger.info(f"Target Frame: {target_frame:.2f}, Barrier Frame: {barrier_frame:.2f}")
-        
-        self.target_phase = 2 * np.pi * (target_frame / self.reference_period)
-        self.barrier_phase = 2 * np.pi * (barrier_frame / self.reference_period)
-        self._ready = True
-
-        self.frame_history = []
+            logger.info(f"SAD Reference Sequence Refreshed. New Target Phase: {self.target_phase:.2f}")
 
         data_manager.save("reference_sequence", self.reference_frames.copy())
-
-        logger.info(f"SAD Model Built: Period={period:.2f}, Target Phase={self.target_phase:.2f}, Barrier Phase={self.barrier_phase:.2f}")
         return True
 
     def _establish_indices(self):
@@ -205,13 +236,14 @@ class SADEstimator(PhaseEstimator):
         scores = sad_with_references(corrected_frame, corrected_refs)
         
         best_idx = np.argmin(scores[Config.Gating.SAD_NUM_EXTRA_REF_FRAMES : -Config.Gating.SAD_NUM_EXTRA_REF_FRAMES]) + Config.Gating.SAD_NUM_EXTRA_REF_FRAMES
-        self._last_best_idx = best_idx  # Store for next frame's tracking
+        fit_res = estimate_phase_from_scores(scores, best_idx, Config.Gating.SAD_FITTER, Config.Gating.SAD_FIT_POINTS, poly_degree=Config.Gating.SAD_POLY_DEGREE, reference_period=self.reference_period, idx_offset=Config.Gating.SAD_NUM_EXTRA_REF_FRAMES)
         
-        fit_res = estimate_phase_from_scores(scores, best_idx, Config.Gating.SAD_FITTER, Config.Gating.SAD_FIT_POINTS, poly_degree=Config.Gating.SAD_POLY_DEGREE, reference_period=self.reference_period, idx_offset=Config.Gating.SAD_NUM_EXTRA_REF_FRAMES
-        )
         phase = fit_res["phase"]
         offset = fit_res["vertex_offset"]
         score = fit_res["minimized_score"]
+
+        # Align the phase to ensure we are consistent relative to the target phase
+        phase = (phase - self.target_phase + self.initial_target_phase) % (2 * np.pi)
 
         current_best_match = self.reference_frames[best_idx]
         self.drift_corrector.add_sample(frame, best_match=current_best_match)
@@ -220,7 +252,7 @@ class SADEstimator(PhaseEstimator):
 
         return {
             "phase": phase % (2 * np.pi),
-            "target_phase": self.target_phase,
+            "target_phase": self.initial_target_phase,
             "barrier_phase": self.barrier_phase,
             "residual": residual,
             "metrics": {
