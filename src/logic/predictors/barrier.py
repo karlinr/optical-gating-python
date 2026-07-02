@@ -23,7 +23,7 @@ class BarrierPredictor(PhasePredictor):
         fitting history window to eliminate the prediction blind spot.
         """
         if len(self.phase_history) < Config.Gating.MIN_HISTORY_FOR_PREDICTION:
-            return None
+            return None, {}
 
         unwrapped_phases = np.unwrap(self.phase_history)
 
