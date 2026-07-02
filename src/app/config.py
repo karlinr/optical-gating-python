@@ -28,7 +28,7 @@ class TimingBox:
     # Desktop I use PORT = "COM5" and EMULATOR_PORT = "COM6"
     # Laptop I use PORT = "COM4" and EMULATOR_PORT = "COM7"
     # SPIM I use PORT = "COM3"
-    PORT = "COM3"
+    PORT = "COM4"
     EMULATOR_PORT = "COM7"
     
     class Physical(IntEnum):
@@ -69,15 +69,15 @@ class Cameras:
     BF = CameraConfig(
         label="Brightfield camera",
         serial="28600723",
-        exposure_us=1000,
+        exposure_us=500,
         gain=0.0,
-        downsample="XI_DWN_4x4",
+        downsample="XI_DWN_2x2",
         roi=(828, 418, 484, 488),
         trigger_pin=2, # Physical GPIO pin on the camera
         box_pins=[
             TimingBox.Logical.BF
             ],
-        framerate=120,
+        framerate=80,
         sensor_taps = "XI_TAP_CNT_4"
     )
 
@@ -85,7 +85,7 @@ class Cameras:
     FL = CameraConfig(
         label="Fluorescence camera",
         serial="CEMAU2502004",
-        exposure_us=1000,
+        exposure_us=2000,
         gain=1.0,
         downsample=None,
         roi=None,
@@ -93,7 +93,7 @@ class Cameras:
         box_pins=[
             TimingBox.Logical.FL_1,
             TimingBox.Logical.FL_2,
-            #TimingBox.Logical.LAS_BLUE, 
+            TimingBox.Logical.LAS_BLUE, 
             TimingBox.Logical.LAS_GREEN
         ],
         framerate=None,
@@ -131,11 +131,9 @@ class Gating:
     SAD_POLY_DEGREE = 1
 
     # MLE parameters
-    MLE_MODEL_BOOTSTRAP_FRAMES = 2000
+    MLE_MODEL_BOOTSTRAP_FRAMES = 1500
     MLE_MODEL_BINS = 50
-    MLE_MODEL_MIN_NOISE = 30
-    MLE_MODEL_SMOOTHING_SIGMA = 0
-    MLE_PHASE_SMOOTHING_SIGMA = 0
+    MLE_MODEL_MIN_NOISE = 10
     MLE_MODEL_DRIFT_CORRECT = True
     MLE_MODEL_POLY_DEGREE = 1
     MLE_FITTER = "U_3P"
@@ -161,7 +159,7 @@ class Gating:
     KALMAN_PROCESS_NOISE = 0.00001
 
 class Config:
-    EMULATE_CAMERA = False
+    EMULATE_CAMERA = True
 
     ExperimentConfig = ExperimentConfig
     TimingBox = TimingBox
